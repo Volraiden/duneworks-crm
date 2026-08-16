@@ -28,6 +28,7 @@ export interface DatabaseStatus {
   tables: {
     users: number;
     clients: number;
+    possibleClients: number;
     projects: number;
     payments: number;
     events: number;
@@ -58,13 +59,15 @@ export async function getDatabaseStatus(): Promise<DatabaseStatus> {
     await prisma.$queryRaw`SELECT 1`;
     const latencyMs = Date.now() - started;
 
-    const [users, clients, projects, payments, events] = await Promise.all([
-      prisma.user.count(),
-      prisma.client.count(),
-      prisma.project.count(),
-      prisma.payment.count(),
-      prisma.calendarEvent.count(),
-    ]);
+    const [users, clients, possibleClients, projects, payments, events] =
+      await Promise.all([
+        prisma.user.count(),
+        prisma.client.count(),
+        prisma.possibleClient.count(),
+        prisma.project.count(),
+        prisma.payment.count(),
+        prisma.calendarEvent.count(),
+      ]);
 
     let latestMigration: string | null = null;
     try {
@@ -93,7 +96,7 @@ export async function getDatabaseStatus(): Promise<DatabaseStatus> {
       lastModified: fileStats?.mtime.toISOString() ?? null,
       checkedAt: new Date().toISOString(),
       latestMigration,
-      tables: { users, clients, projects, payments, events },
+      tables: { users, clients, possibleClients, projects, payments, events },
     };
   } catch (error) {
     return {
@@ -110,7 +113,7 @@ export async function getDatabaseStatus(): Promise<DatabaseStatus> {
       lastModified: fileStats?.mtime.toISOString() ?? null,
       checkedAt: new Date().toISOString(),
       latestMigration: null,
-      tables: { users: 0, clients: 0, projects: 0, payments: 0, events: 0 },
+      tables: { users: 0, clients: 0, possibleClients: 0, projects: 0, payments: 0, events: 0 },
       error: error instanceof Error ? error.message : "Database unreachable",
     };
   }

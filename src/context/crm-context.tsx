@@ -13,10 +13,12 @@ import {
   removeClient,
   removeEvent,
   removePayment,
+  removePossibleClient,
   removeProject,
   saveClient,
   saveEvent,
   savePayment,
+  savePossibleClient,
   saveProject,
   saveSettings,
 } from "@/app/actions/crm";
@@ -27,6 +29,7 @@ import type {
   CrmData,
   DialogState,
   Payment,
+  PossibleClient,
   Project,
   StudioSettings,
 } from "@/lib/types";
@@ -55,6 +58,10 @@ interface CrmContextValue {
     input: Omit<CalendarEvent, "id"> & { id?: string }
   ) => Promise<string>;
   deleteEvent: (id: string) => Promise<void>;
+  upsertPossibleClient: (
+    input: Omit<PossibleClient, "id" | "createdAt"> & { id?: string }
+  ) => Promise<string>;
+  deletePossibleClient: (id: string) => Promise<void>;
   updateSettings: (patch: Partial<StudioSettings>) => Promise<void>;
 }
 
@@ -158,6 +165,23 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     [refresh]
   );
 
+  const upsertPossibleClient: CrmContextValue["upsertPossibleClient"] = useCallback(
+    async (input) => {
+      const id = await savePossibleClient(input);
+      await refresh();
+      return id;
+    },
+    [refresh]
+  );
+
+  const deletePossibleClient = useCallback(
+    async (id: string) => {
+      await removePossibleClient(id);
+      await refresh();
+    },
+    [refresh]
+  );
+
   const updateSettings = useCallback(
     async (patch: Partial<StudioSettings>) => {
       await saveSettings(patch);
@@ -181,6 +205,8 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       deletePayment,
       upsertEvent,
       deleteEvent,
+      upsertPossibleClient,
+      deletePossibleClient,
       updateSettings,
     }),
     [
@@ -189,6 +215,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       deleteClient,
       deleteEvent,
       deletePayment,
+      deletePossibleClient,
       deleteProject,
       dialog,
       openDialog,
@@ -197,6 +224,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       upsertClient,
       upsertEvent,
       upsertPayment,
+      upsertPossibleClient,
       upsertProject,
     ]
   );

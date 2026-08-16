@@ -8,6 +8,7 @@ import {
   mapClient,
   mapEvent,
   mapPayment,
+  mapPossibleClient,
   mapProject,
   mapSettings,
 } from "@/lib/mappers";
@@ -16,6 +17,7 @@ import type {
   Client,
   CrmData,
   Payment,
+  PossibleClient,
   Project,
   StudioSettings,
 } from "@/lib/types";
@@ -49,19 +51,22 @@ export async function getCrmData(): Promise<CrmData> {
   if (!session) return EMPTY_CRM_DATA;
 
   const prisma = await getPrisma();
-  const [clients, projects, payments, events, settings] = await Promise.all([
-    prisma.client.findMany({ orderBy: { lastActivity: "desc" } }),
-    prisma.project.findMany({ orderBy: { createdAt: "desc" } }),
-    prisma.payment.findMany({ orderBy: { date: "desc" } }),
-    prisma.calendarEvent.findMany({ orderBy: { date: "asc" } }),
-    ensureSettings(),
-  ]);
+  const [clients, projects, payments, events, possibleClients, settings] =
+    await Promise.all([
+      prisma.client.findMany({ orderBy: { lastActivity: "desc" } }),
+      prisma.project.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.payment.findMany({ orderBy: { date: "desc" } }),
+      prisma.calendarEvent.findMany({ orderBy: { date: "asc" } }),
+      prisma.possibleClient.findMany({ orderBy: { createdAt: "desc" } }),
+      ensureSettings(),
+    ]);
 
   return {
     clients: clients.map(mapClient),
     projects: projects.map(mapProject),
     payments: payments.map(mapPayment),
     events: events.map(mapEvent),
+    possibleClients: possibleClients.map(mapPossibleClient),
     settings: mapSettings(settings),
   };
 }
@@ -190,6 +195,31 @@ export async function removeEvent(id: string) {
   await requireSession();
   const prisma = await getPrisma();
   await prisma.calendarEvent.delete({ where: { id } });
+}
+
+export async function savePossibleClient(
+  input: Omit<PossibleClient, "id" | "createdAt"> & { id?: string }
+) {
+  await requireSession();
+  const prisma = await getPrisma();
+  const data = {
+    company: input.company,
+    phone: input.phone,
+    outcome: input.outcome,
+    notes: input.notes,
+  };
+
+  const row = input.id
+    ? await prisma.possibleClient.update({ where: { id: input.id }, data })
+    : await prisma.possibleClient.create({ data });
+
+  return row.id;
+}
+
+export async function removePossibleClient(id: string) {
+  await requireSession();
+  const prisma = await getPrisma();
+  await prisma.possibleClient.delete({ where: { id } });
 }
 
 export async function saveSettings(patch: Partial<StudioSettings>) {

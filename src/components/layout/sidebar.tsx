@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   PanelLeft,
+  Phone,
   Settings,
   Users,
   Clapperboard,
@@ -28,6 +29,7 @@ import { DatabaseHealth } from "@/components/database-health";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/possible-clients", label: "Possible clients", icon: Phone },
   { href: "/projects", label: "Projects", icon: Clapperboard },
   { href: "/finance", label: "Finance", icon: Wallet },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },

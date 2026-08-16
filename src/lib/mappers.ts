@@ -8,6 +8,8 @@ import type {
   Payment,
   PaymentMethod,
   PaymentStatus,
+  PossibleClient,
+  PossibleClientOutcome,
   Project,
   ProjectStatus,
   StudioSettings,
@@ -16,6 +18,7 @@ import type {
   CalendarEvent as DbEvent,
   Client as DbClient,
   Payment as DbPayment,
+  PossibleClient as DbPossibleClient,
   Project as DbProject,
   StudioSettings as DbSettings,
 } from "@/generated/prisma/client";
@@ -86,6 +89,17 @@ export function mapEvent(row: DbEvent): CalendarEvent {
     notes: row.notes,
     clientId: row.clientId ?? undefined,
     projectId: row.projectId ?? undefined,
+  };
+}
+
+export function mapPossibleClient(row: DbPossibleClient): PossibleClient {
+  return {
+    id: row.id,
+    company: row.company,
+    phone: row.phone,
+    outcome: row.outcome as PossibleClientOutcome,
+    notes: row.notes,
+    createdAt: toDateOnly(row.createdAt),
   };
 }
 

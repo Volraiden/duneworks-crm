@@ -51,19 +51,31 @@ async function ensureLocalSchema(filePath: string) {
 
   const client = createClient({ url: `file:${filePath}` });
   try {
-    const existing = await client.execute(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='User'"
+    const tables = await client.execute(
+      "SELECT name FROM sqlite_master WHERE type='table'"
     );
-    if (existing.rows.length > 0) return;
-
+    const names = new Set(tables.rows.map((row) => String(row.name)));
     const root = migrationsDirectory();
     if (!existsSync(root)) return;
+
     const folders = readdirSync(root)
       .filter((name) => existsSync(path.join(root, name, "migration.sql")))
       .sort();
-    for (const folder of folders) {
-      const sql = readFileSync(path.join(root, folder, "migration.sql"), "utf8");
-      await client.executeMultiple(sql);
+
+    if (!names.has("User")) {
+      for (const folder of folders) {
+        const sql = readFileSync(path.join(root, folder, "migration.sql"), "utf8");
+        await client.executeMultiple(sql);
+      }
+      return;
+    }
+
+    if (!names.has("PossibleClient")) {
+      const folder = folders.find((name) => name.includes("possible_clients"));
+      if (folder) {
+        const sql = readFileSync(path.join(root, folder, "migration.sql"), "utf8");
+        await client.executeMultiple(sql);
+      }
     }
   } finally {
     client.close();

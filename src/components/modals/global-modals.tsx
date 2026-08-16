@@ -5,6 +5,7 @@ import { ClientForm } from "@/components/forms/client-form";
 import { ProjectForm } from "@/components/forms/project-form";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { EventForm } from "@/components/forms/event-form";
+import { PossibleClientForm } from "@/components/forms/possible-client-form";
 import { ClientDetail } from "@/components/clients/client-detail";
 import { ProjectDetail } from "@/components/projects/project-detail";
 import { InvoiceModal } from "@/components/finance/invoice-modal";
@@ -34,12 +35,17 @@ export function GlobalModals() {
     upsertProject,
     upsertPayment,
     upsertEvent,
+    upsertPossibleClient,
+    deletePossibleClient,
   } = useCrm();
 
   const editingClient = data.clients.find((client) => client.id === dialog.id);
   const editingProject = data.projects.find((project) => project.id === dialog.id);
   const editingPayment = data.payments.find((payment) => payment.id === dialog.id);
   const editingEvent = data.events.find((event) => event.id === dialog.id);
+  const editingPossibleClient = data.possibleClients.find(
+    (prospect) => prospect.id === dialog.id
+  );
 
   return (
     <>
@@ -150,6 +156,43 @@ export function GlobalModals() {
             onSubmit={async (values) => {
               await upsertEvent({ ...values, id: editingEvent?.id });
               toast.success(editingEvent ? "Event updated" : "Event added");
+              closeDialog();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dialog.kind === "possibleClient"}
+        onOpenChange={(open) => !open && closeDialog()}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPossibleClient ? "Edit possible client" : "Log possible client"}
+            </DialogTitle>
+            <DialogDescription>
+              Company, phone, and whether they needed the service, will let you know, or said no.
+            </DialogDescription>
+          </DialogHeader>
+          <PossibleClientForm
+            key={dialog.id ?? "new-possible-client"}
+            prospect={editingPossibleClient}
+            onCancel={closeDialog}
+            onDelete={
+              editingPossibleClient
+                ? async () => {
+                    await deletePossibleClient(editingPossibleClient.id);
+                    toast.success("Possible client removed");
+                    closeDialog();
+                  }
+                : undefined
+            }
+            onSubmit={async (values) => {
+              await upsertPossibleClient({ ...values, id: editingPossibleClient?.id });
+              toast.success(
+                editingPossibleClient ? "Possible client updated" : "Possible client logged"
+              );
               closeDialog();
             }}
           />

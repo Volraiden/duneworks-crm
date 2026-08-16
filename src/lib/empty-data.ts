@@ -20,6 +20,7 @@ export const EMPTY_CRM_DATA: CrmData = {
   projects: [],
   payments: [],
   events: [],
+  possibleClients: [],
   settings: DEFAULT_SETTINGS,
 };
 

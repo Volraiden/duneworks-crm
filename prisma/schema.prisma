@@ -112,3 +112,16 @@ model CalendarEvent {
   @@index([date])
   @@index([type])
 }
+
+model PossibleClient {
+  id        String   @id @default(cuid())
+  company   String
+  phone     String
+  outcome   String
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([outcome])
+  @@index([company])
+}

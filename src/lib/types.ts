@@ -37,6 +37,13 @@ export type ClientTag = (typeof CLIENT_TAGS)[number];
 export const APPEARANCE_OPTIONS = ["dark", "light", "system"] as const;
 export type Appearance = (typeof APPEARANCE_OPTIONS)[number];
 
+export const POSSIBLE_CLIENT_OUTCOMES = [
+  "Needed the service",
+  "Will let us know",
+  "Said no",
+] as const;
+export type PossibleClientOutcome = (typeof POSSIBLE_CLIENT_OUTCOMES)[number];
+
 export interface ChecklistItem {
   id: string;
   label: string;
@@ -92,6 +99,15 @@ export interface CalendarEvent {
   projectId?: string;
 }
 
+export interface PossibleClient {
+  id: string;
+  company: string;
+  phone: string;
+  outcome: PossibleClientOutcome;
+  notes: string;
+  createdAt: string;
+}
+
 export interface NotificationPrefs {
   projectDeadlines: boolean;
   paymentReminders: boolean;
@@ -114,6 +130,7 @@ export interface CrmData {
   projects: Project[];
   payments: Payment[];
   events: CalendarEvent[];
+  possibleClients: PossibleClient[];
   settings: StudioSettings;
 }
 
@@ -122,6 +139,7 @@ export type DialogKind =
   | "project"
   | "payment"
   | "event"
+  | "possibleClient"
   | "clientDetail"
   | "projectDetail"
   | "paymentDetail";

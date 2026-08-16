@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import Link from "next/link";
-import { ArrowUpRight, Clapperboard, Plus, Users } from "lucide-react";
+import { ArrowUpRight, Clapperboard, Phone, Plus, Users } from "lucide-react";
 import { PageHeader, PageTransition } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ import { compareAsc, parseISO } from "date-fns";
 export default function DashboardPage() {
   const { user } = useAuth();
   const { data, openDialog } = useCrm();
-  const { clients, projects, payments } = data;
+  const { clients, projects, payments, possibleClients } = data;
 
   const totalRevenue = paidAmount(payments);
   const thisMonth = monthlyRevenue(payments);
@@ -54,6 +54,10 @@ export default function DashboardPage() {
         description="Production, clients, and cashflow for Duneworks — in one place."
         actions={
           <>
+            <Button variant="outline" onClick={() => openDialog("possibleClient")}>
+              <Phone />
+              Log possible client
+            </Button>
             <Button variant="outline" onClick={() => openDialog("client")}>
               <Users />
               Add Client
@@ -90,6 +94,45 @@ export default function DashboardPage() {
           value={String(outstanding)}
           hint="Pending + overdue"
         />
+      </div>
+      <div className="mt-4">
+        <Card className="glass-panel">
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Possible clients</CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/possible-clients">
+                Open list
+                <ArrowUpRight />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(
+                [
+                  "Needed the service",
+                  "Will let us know",
+                  "Said no",
+                ] as const
+              ).map((outcome) => (
+                <div
+                  key={outcome}
+                  className="rounded-xl border border-border/70 bg-card/50 px-3 py-3"
+                >
+                  <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+                    {outcome}
+                  </p>
+                  <p className="font-heading mt-1 text-2xl">
+                    {
+                      possibleClients.filter((prospect) => prospect.outcome === outcome)
+                        .length
+                    }
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
       <div className="mt-4">
         <DatabaseStatusPanel compact />
