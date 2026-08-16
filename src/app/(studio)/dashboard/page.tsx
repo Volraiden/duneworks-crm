@@ -16,6 +16,7 @@ import { PageHeader, PageTransition } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PaymentStatusBadge, ProjectStatusBadge } from "@/components/status-badge";
+import { DatabaseStatusPanel } from "@/components/database-status";
 import { useAuth } from "@/context/auth-context";
 import { useCrm } from "@/context/crm-context";
 import {
@@ -90,6 +91,9 @@ export default function DashboardPage() {
           hint="Pending + overdue"
         />
       </div>
+      <div className="mt-4">
+        <DatabaseStatusPanel compact />
+      </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <Card className="glass-panel">
           <CardHeader>
@@ -137,25 +141,29 @@ export default function DashboardPage() {
             <CardTitle>Upcoming deadlines</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {upcoming.map((project) => {
-              const client = clients.find((item) => item.id === project.clientId);
-              return (
-                <button
-                  key={project.id}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-left transition hover:border-primary/40"
-                  onClick={() => openDialog("projectDetail", project.id)}
-                >
-                  <div>
-                    <p className="text-sm font-medium">{project.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {client?.company} · {formatDate(project.deadline)}
-                    </p>
-                  </div>
-                  <ProjectStatusBadge status={project.status} />
-                </button>
-              );
-            })}
+            {upcoming.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No upcoming deadlines.</p>
+            ) : (
+              upcoming.map((project) => {
+                const client = clients.find((item) => item.id === project.clientId);
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-left transition hover:border-primary/40"
+                    onClick={() => openDialog("projectDetail", project.id)}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{project.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {client?.company} · {formatDate(project.deadline)}
+                      </p>
+                    </div>
+                    <ProjectStatusBadge status={project.status} />
+                  </button>
+                );
+              })
+            )}
           </CardContent>
         </Card>
       </div>

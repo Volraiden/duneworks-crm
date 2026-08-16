@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
+import { DatabaseHealth } from "@/components/database-health";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -100,6 +101,7 @@ export function Sidebar({
       </nav>
       <Separator />
       <div className="p-3">
+        <DatabaseHealth collapsed={collapsed} />
         <div
           className={cn(
             "mb-3 rounded-xl bg-sidebar-accent/60 px-3 py-3",

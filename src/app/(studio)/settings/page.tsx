@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { useCrm } from "@/context/crm-context";
 import type { Appearance } from "@/lib/types";
+import { DatabaseStatusPanel } from "@/components/database-status";
 
 export default function SettingsPage() {
   const { data, updateSettings } = useCrm();
@@ -47,7 +48,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Studio"
         title="Settings"
-        description="Profile, notifications, and appearance — saved to the studio database."
+        description="Profile, notifications, appearance, and database health."
       />
       <div className="grid gap-6">
         <Card className="glass-panel">
@@ -187,6 +188,8 @@ export default function SettingsPage() {
             </Field>
           </CardContent>
         </Card>
+
+        <DatabaseStatusPanel />
       </div>
     </PageTransition>
   );
