@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { DEFAULT_SETTINGS, EMPTY_CRM_DATA } from "@/lib/empty-data";
 import {
@@ -27,6 +27,7 @@ async function requireSession() {
 }
 
 async function ensureSettings() {
+  const prisma = await getPrisma();
   const existing = await prisma.studioSettings.findUnique({
     where: { id: "studio" },
   });
@@ -47,6 +48,7 @@ export async function getCrmData(): Promise<CrmData> {
   const session = await getSession();
   if (!session) return EMPTY_CRM_DATA;
 
+  const prisma = await getPrisma();
   const [clients, projects, payments, events, settings] = await Promise.all([
     prisma.client.findMany({ orderBy: { lastActivity: "desc" } }),
     prisma.project.findMany({ orderBy: { createdAt: "desc" } }),
@@ -68,6 +70,7 @@ export async function saveClient(
   input: Omit<Client, "id" | "createdAt" | "lastActivity"> & { id?: string }
 ) {
   await requireSession();
+  const prisma = await getPrisma();
   const now = new Date();
   const data = {
     name: input.name,
@@ -89,6 +92,7 @@ export async function saveClient(
 
 export async function removeClient(id: string) {
   await requireSession();
+  const prisma = await getPrisma();
   await prisma.client.delete({ where: { id } });
 }
 
@@ -96,6 +100,7 @@ export async function saveProject(
   input: Omit<Project, "id" | "createdAt"> & { id?: string }
 ) {
   await requireSession();
+  const prisma = await getPrisma();
   const data = {
     name: input.name,
     clientId: input.clientId,
@@ -122,6 +127,7 @@ export async function saveProject(
 
 export async function removeProject(id: string) {
   await requireSession();
+  const prisma = await getPrisma();
   await prisma.project.delete({ where: { id } });
 }
 
@@ -129,6 +135,7 @@ export async function savePayment(
   input: Omit<Payment, "id"> & { id?: string }
 ) {
   await requireSession();
+  const prisma = await getPrisma();
   const data = {
     date: fromDateOnly(input.date),
     clientId: input.clientId,
@@ -154,6 +161,7 @@ export async function savePayment(
 
 export async function removePayment(id: string) {
   await requireSession();
+  const prisma = await getPrisma();
   await prisma.payment.delete({ where: { id } });
 }
 
@@ -161,6 +169,7 @@ export async function saveEvent(
   input: Omit<CalendarEvent, "id"> & { id?: string }
 ) {
   await requireSession();
+  const prisma = await getPrisma();
   const data = {
     title: input.title,
     date: fromDateOnly(input.date),
@@ -179,11 +188,13 @@ export async function saveEvent(
 
 export async function removeEvent(id: string) {
   await requireSession();
+  const prisma = await getPrisma();
   await prisma.calendarEvent.delete({ where: { id } });
 }
 
 export async function saveSettings(patch: Partial<StudioSettings>) {
   await requireSession();
+  const prisma = await getPrisma();
   const current = mapSettings(await ensureSettings());
   const next: StudioSettings = {
     ...current,

@@ -1,7 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import {
   clearSessionCookie,
   getSession,
@@ -15,6 +15,7 @@ export async function getAuthStatus(): Promise<{
   needsSetup: boolean;
   user: SessionUser | null;
 }> {
+  const prisma = await getPrisma();
   const userCount = await prisma.user.count();
   const user = await getSession();
   return {
@@ -30,6 +31,7 @@ export async function registerStudio(input: {
   password: string;
   studioName: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const prisma = await getPrisma();
   const existing = await prisma.user.count();
   if (existing > 0) {
     return { ok: false, error: "A studio account already exists." };
@@ -86,6 +88,7 @@ export async function loginStudio(input: {
   email: string;
   password: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const prisma = await getPrisma();
   const email = input.email.trim().toLowerCase();
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return { ok: false, error: "invalid" };
