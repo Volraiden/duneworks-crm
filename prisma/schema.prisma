@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("Studio Lead")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StudioSettings {
+  id                String   @id @default("studio")
+  studioName        String
+  email             String
+  phone             String   @default("")
+  website           String   @default("")
+  address           String   @default("")
+  projectDeadlines  Boolean  @default(true)
+  paymentReminders  Boolean  @default(true)
+  newLeads          Boolean  @default(true)
+  weeklyDigest      Boolean  @default(false)
+  appearance        String   @default("dark")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Client {
+  id           String          @id @default(cuid())
+  name         String
+  company      String
+  email        String
+  phone        String          @default("")
+  status       String
+  tags         String          @default("[]")
+  notes        String          @default("")
+  lastActivity DateTime        @default(now())
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  projects     Project[]
+  payments     Payment[]
+  events       CalendarEvent[]
+
+  @@index([status])
+  @@index([company])
+}
+
+model Project {
+  id         String          @id @default(cuid())
+  name       String
+  clientId   String
+  client     Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type       String
+  budget     Float
+  deadline   DateTime
+  status     String
+  progress   Int             @default(0)
+  notes      String          @default("")
+  checklist  String          @default("[]")
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  payments   Payment[]
+  events     CalendarEvent[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([deadline])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  date          DateTime
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  amount        Float
+  status        String
+  method        String
+  invoiceNumber String   @unique
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([date])
+}
+
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  title     String
+  date      DateTime
+  type      String
+  notes     String   @default("")
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([type])
+}
