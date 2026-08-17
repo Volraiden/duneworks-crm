@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 export default function CalendarPage() {
   const { data, openDialog, deleteEvent } = useCrm();
   const { allow } = useAuth();
-  const [cursor, setCursor] = useState(new Date(2026, 7, 1));
+  const [cursor, setCursor] = useState(new Date());
   const [selected, setSelected] = useState<string | null>(null);
 
   const days = useMemo(() => {

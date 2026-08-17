@@ -4,12 +4,10 @@ Studio CRM for Duneworks Productions — client pipeline, productions, finance, 
 
 ## Sign in
 
-Demo admin credentials live in `src/lib/seed-config.ts` (not in UI components):
+Studio admin credentials live in `src/lib/seed-config.ts` (not in UI components):
 
 - Email: `Duneworksstudios@gmail.com`
 - Password: `Duneworks123`
-
-Additional seeded studio users are listed in the same file.
 
 ## Stack
 
