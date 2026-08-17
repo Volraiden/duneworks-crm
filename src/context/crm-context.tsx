@@ -60,10 +60,10 @@ interface CrmContextValue {
   }) => Promise<void>;
   addNote: (clientId: string, body: string) => Promise<void>;
   upsertProject: (
-    input: Omit<Project, "id" | "createdAt"> & { id?: string }
+    input: Omit<Project, "id" | "createdAt" | "updatedAt"> & { id?: string }
   ) => Promise<string>;
   deleteProject: (id: string) => Promise<void>;
-  upsertPayment: (input: Omit<Payment, "id"> & { id?: string }) => Promise<string>;
+  upsertPayment: (input: Omit<Payment, "id" | "createdAt"> & { id?: string }) => Promise<string>;
   deletePayment: (id: string) => Promise<void>;
   upsertEvent: (
     input: Omit<CalendarEvent, "id"> & { id?: string }

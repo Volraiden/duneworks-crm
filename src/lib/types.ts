@@ -73,6 +73,7 @@ export interface TeamMember {
   email: string;
   role: Role;
   active: boolean;
+  createdAt: string;
 }
 
 export interface PipelineStage {
@@ -92,11 +93,21 @@ export interface ClientNote {
   createdAt: string;
 }
 
+export type ClientActivityType =
+  | "created"
+  | "stage_move"
+  | "note"
+  | "denied"
+  | "updated"
+  | "payment_received"
+  | "project_created"
+  | "project_completed";
+
 export interface ClientActivity {
   id: string;
   clientId: string;
   userId: string | null;
-  type: "created" | "stage_move" | "note" | "denied" | "updated";
+  type: ClientActivityType;
   fromStage: string;
   toStage: string;
   reason: string;
@@ -136,6 +147,7 @@ export interface Project {
   notes: string;
   checklist: ChecklistItem[];
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Payment {
@@ -148,6 +160,7 @@ export interface Payment {
   method: PaymentMethod;
   invoiceNumber: string;
   notes: string;
+  createdAt: string;
 }
 
 export interface CalendarEvent {
@@ -198,7 +211,8 @@ export type DialogKind =
   | "projectDetail"
   | "paymentDetail"
   | "stage"
-  | "deny";
+  | "deny"
+  | "user";
 
 export interface DialogState {
   kind: DialogKind | null;

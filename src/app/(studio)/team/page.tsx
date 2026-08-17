@@ -4,17 +4,8 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader, PageTransition } from "@/components/page-chrome";
+import { UserForm } from "@/components/forms/user-form";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -41,13 +32,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { deleteUser, saveUser } from "@/app/actions/users";
+import { deleteUser } from "@/app/actions/users";
+import { useAuth } from "@/context/auth-context";
 import { useCrm } from "@/context/crm-context";
-import { ROLES, type Role } from "@/lib/permissions";
 import type { TeamMember } from "@/lib/types";
 
 export default function TeamPage() {
   const { data, refresh } = useCrm();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -118,6 +110,7 @@ export default function TeamPage() {
       <UserDialog
         open={open}
         member={editing}
+        actor={{ id: user?.id ?? "", name: user?.name ?? "Studio" }}
         onOpenChange={setOpen}
         onSaved={async () => {
           setOpen(false);
@@ -159,113 +152,33 @@ export default function TeamPage() {
 function UserDialog({
   open,
   member,
+  actor,
   onOpenChange,
   onSaved,
 }: {
   open: boolean;
   member: TeamMember | null;
+  actor: { id: string; name: string };
   onOpenChange: (open: boolean) => void;
   onSaved: () => Promise<void>;
 }) {
-  const [name, setName] = useState(member?.name ?? "");
-  const [email, setEmail] = useState(member?.email ?? "");
-  const [role, setRole] = useState<Role>(member?.role ?? "Editor");
-  const [password, setPassword] = useState("");
-  const [active, setActive] = useState(member?.active ?? true);
-  const [error, setError] = useState("");
-
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-    >
-      <DialogContent
-        onOpenAutoFocus={() => {
-          setName(member?.name ?? "");
-          setEmail(member?.email ?? "");
-          setRole(member?.role ?? "Editor");
-          setPassword("");
-          setActive(member?.active ?? true);
-          setError("");
-        }}
-      >
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{member ? "Edit user" : "Add user"}</DialogTitle>
           <DialogDescription>
             Roles control pipeline, finance, settings, and who can delete records.
           </DialogDescription>
         </DialogHeader>
-        <form
-          className="grid gap-3"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const result = await saveUser({
-              id: member?.id,
-              name,
-              email,
-              role,
-              password: password || undefined,
-              active,
-            });
-            if (!result.ok) {
-              setError(result.error);
-              return;
-            }
-            toast.success(member ? "User updated" : "User created");
-            await onSaved();
-          }}
-        >
-          <Field label="Name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label="Email">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-          <Field label="Role">
-            <Select value={role} onValueChange={(value) => setRole(value as Role)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={member ? "New password (optional)" : "Password"}>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-          {member ? (
-            <div className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2">
-              <Label>Active</Label>
-              <Switch checked={active} onCheckedChange={setActive} />
-            </div>
-          ) : null}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Save</Button>
-          </div>
-        </form>
+        <UserForm
+          key={member?.id ?? "new-user"}
+          member={member}
+          actor={actor}
+          onCancel={() => onOpenChange(false)}
+          onSaved={onSaved}
+        />
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
-    </div>
   );
 }

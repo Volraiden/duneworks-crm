@@ -28,7 +28,7 @@ export function ProjectForm({
   project?: Project;
   clients: Client[];
   presetClientId?: string;
-  onSubmit: (values: Omit<Project, "id" | "createdAt">) => void | Promise<void>;
+  onSubmit: (values: Omit<Project, "id" | "createdAt" | "updatedAt">) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(project?.name ?? "");

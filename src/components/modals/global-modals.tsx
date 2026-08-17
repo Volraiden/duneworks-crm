@@ -6,6 +6,7 @@ import { StageForm } from "@/components/forms/stage-form";
 import { ProjectForm } from "@/components/forms/project-form";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { EventForm } from "@/components/forms/event-form";
+import { UserForm } from "@/components/forms/user-form";
 import { CompanyDetail } from "@/components/clients/company-detail";
 import { ProjectDetail } from "@/components/projects/project-detail";
 import { InvoiceModal } from "@/components/finance/invoice-modal";
@@ -42,30 +43,39 @@ export function GlobalModals() {
     sortStages,
     addNote,
     deleteClient,
+    refresh,
   } = useCrm();
-  const { allow } = useAuth();
+  const { allow, user } = useAuth();
 
   const editingClient = data.clients.find((client) => client.id === dialog.id);
   const editingProject = data.projects.find((project) => project.id === dialog.id);
   const editingPayment = data.payments.find((payment) => payment.id === dialog.id);
   const editingEvent = data.events.find((event) => event.id === dialog.id);
+  const editingUser = data.team.find((member) => member.id === dialog.id);
   const paidClients = data.clients.filter((client) => isPaidClient(client, data.stages));
+  const isClientIntent = dialog.preset?.intent === "client";
 
   return (
     <>
       <Dialog open={dialog.kind === "client"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editingClient ? "Edit company" : "Add company"}</DialogTitle>
+            <DialogTitle>
+              {editingClient ? "Edit company" : isClientIntent ? "Add client" : "Add company"}
+            </DialogTitle>
             <DialogDescription>
-              Log company, contact, value, and the first pipeline stage.
+              {isClientIntent
+                ? "Add a signed client with company, contact, and production details."
+                : "Log company, contact, value, and the first pipeline stage."}
             </DialogDescription>
           </DialogHeader>
           <CompanyForm
-            key={dialog.id ?? "new-company"}
+            key={`${dialog.id ?? "new-company"}-${dialog.preset?.stageId ?? ""}`}
             client={editingClient}
             stages={data.stages}
             team={data.team}
+            defaultStageId={dialog.preset?.stageId}
+            submitLabel={isClientIntent ? "Add client" : undefined}
             onCancel={closeDialog}
             onSubmit={async (values) => {
               await upsertClient({ ...values, id: editingClient?.id });
@@ -283,6 +293,29 @@ export function GlobalModals() {
                   ? () => openDialog("payment", editingPayment.id)
                   : () => {}
               }
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog.kind === "user"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingUser ? "Edit user" : "Add team member"}</DialogTitle>
+            <DialogDescription>
+              Roles control pipeline, finance, settings, and who can delete records.
+            </DialogDescription>
+          </DialogHeader>
+          {user ? (
+            <UserForm
+              key={dialog.id ?? "new-user"}
+              member={editingUser}
+              actor={{ id: user.id, name: user.name }}
+              onCancel={closeDialog}
+              onSaved={async () => {
+                await refresh();
+                closeDialog();
+              }}
             />
           ) : null}
         </DialogContent>

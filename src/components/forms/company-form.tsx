@@ -21,12 +21,16 @@ export function CompanyForm({
   client,
   stages,
   team,
+  defaultStageId,
+  submitLabel,
   onSubmit,
   onCancel,
 }: {
   client?: Client;
   stages: PipelineStage[];
   team: TeamMember[];
+  defaultStageId?: string;
+  submitLabel?: string;
   onSubmit: (
     values: Omit<Client, "id" | "createdAt" | "lastActivity" | "clientNumber" | "sortOrder">
   ) => void | Promise<void>;
@@ -42,7 +46,9 @@ export function CompanyForm({
   );
   const [source, setSource] = useState(client?.source || CLIENT_SOURCES[0]);
   const [assignedUserId, setAssignedUserId] = useState(client?.assignedUserId ?? "");
-  const [stageId, setStageId] = useState(client?.stageId ?? stages[0]?.id ?? "");
+  const [stageId, setStageId] = useState(
+    client?.stageId ?? defaultStageId ?? stages[0]?.id ?? ""
+  );
   const [tags, setTags] = useState<string[]>(client?.tags ?? []);
   const [customTag, setCustomTag] = useState("");
   const [notes, setNotes] = useState(client?.notes ?? "");
@@ -213,7 +219,9 @@ export function CompanyForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit">{client ? "Save company" : "Add company"}</Button>
+        <Button type="submit">
+          {submitLabel ?? (client ? "Save company" : "Add company")}
+        </Button>
       </div>
     </form>
   );

@@ -1,333 +1,257 @@
 "use client";
 
-import { motion } from "framer-motion";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import Link from "next/link";
-import { ArrowUpRight, Clapperboard, Columns3, Plus, Users } from "lucide-react";
-import { PageHeader, PageTransition } from "@/components/page-chrome";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { PageTransition } from "@/components/page-chrome";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { MetricCards } from "@/components/dashboard/metric-cards";
+import { RevenuePipelineCharts } from "@/components/dashboard/charts";
+import { ActivityFeed, ActivityLogSheet } from "@/components/dashboard/activity-feed";
+import { AlertsPanel } from "@/components/dashboard/alerts-panel";
+import { RecentUpdates } from "@/components/dashboard/recent-updates";
+import { TasksPanel } from "@/components/dashboard/tasks-panel";
+import { TeamOverview } from "@/components/dashboard/team-overview";
+import { DashboardDetailSheet } from "@/components/dashboard/detail-sheet";
+import { DashboardSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PaymentStatusBadge, ProjectStatusBadge } from "@/components/status-badge";
-import { DatabaseStatusPanel } from "@/components/database-status";
 import { useAuth } from "@/context/auth-context";
 import { useCrm } from "@/context/crm-context";
 import {
-  monthlyRevenue,
-  outstandingCount,
-  paidAmount,
-  revenueByMonth,
-} from "@/lib/analytics";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { compareAsc, parseISO } from "date-fns";
+  buildDashboardModel,
+  searchCrm,
+  type DashboardTarget,
+  type DetailRow,
+  type MetricId,
+} from "@/lib/dashboard";
+import { useDashboardLocal } from "@/lib/dashboard-storage";
+import { isPaidStage } from "@/lib/types";
 
 export default function DashboardPage() {
-  const { user, allow } = useAuth();
-  const { data, openDialog } = useCrm();
-  const { clients, projects, payments, stages } = data;
+  const router = useRouter();
+  const { user, allow, logout } = useAuth();
+  const { data, openDialog, refresh, dialog } = useCrm();
+  const local = useDashboardLocal();
+  const { reloadAudit, markRead, markAllRead, addTask, toggleTask, toggleDerived } = local;
+  const [query, setQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [detail, setDetail] = useState<{
+    title: string;
+    description?: string;
+    rows: DetailRow[];
+  } | null>(null);
 
-  const totalRevenue = paidAmount(payments);
-  const thisMonth = monthlyRevenue(payments);
-  const activeClients = clients.filter((client) => client.status === "Active").length;
-  const outstanding = outstandingCount(payments);
-  const chart = revenueByMonth(payments);
   const showFinance = allow("viewFinanceAnalytics");
-  const recentPayments = [...payments]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 6);
-  const upcoming = [...projects]
-    .filter((project) => project.status !== "Delivered")
-    .sort((a, b) => compareAsc(parseISO(a.deadline), parseISO(b.deadline)))
-    .slice(0, 5);
+  const showPayments = allow("viewFinance");
+  const showTeam = user?.role === "Admin" || user?.role === "Manager";
+
+  useEffect(() => {
+    if (dialog.kind === null) reloadAudit();
+  }, [dialog.kind, reloadAudit]);
+
+  const model = useMemo(
+    () =>
+      buildDashboardModel(data, {
+        tasks: local.tasks,
+        audit: local.audit,
+        completedDerived: local.completedDerived,
+        showFinance,
+        showPayments,
+        showTeam,
+      }),
+    [data, local.audit, local.completedDerived, local.tasks, showFinance, showPayments, showTeam]
+  );
+
+  const activity = useMemo(() => {
+    return model.activity.filter((entry) => {
+      if (!showPayments && entry.type === "payment_received") return false;
+      if (!showTeam && (entry.type === "team_added" || entry.type === "permission_changed")) {
+        return false;
+      }
+      return true;
+    });
+  }, [model.activity, showPayments, showTeam]);
+
+  const searchHits = useMemo(() => searchCrm(data, query), [data, query]);
+  const unreadCount = model.alerts.filter((alert) => !local.readIds.includes(alert.id)).length;
+
+  function openTarget(target: DashboardTarget) {
+    if (target.type === "route") {
+      router.push(target.href);
+      return;
+    }
+    openDialog(target.kind, target.id ?? null, target.preset);
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await refresh();
+      reloadAudit();
+      toast.success("Dashboard updated");
+    } catch {
+      setError("Could not refresh studio data.");
+      toast.error("Could not refresh the dashboard.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function openMetric(id: MetricId) {
+    const metric = model.metrics.find((item) => item.id === id);
+    setDetail({
+      title: metric?.label ?? "Detail",
+      description: metric?.hint,
+      rows: model.metricDetails[id] ?? [],
+    });
+  }
+
+  if (!local.hydrated) {
+    return (
+      <PageTransition>
+        <DashboardSkeleton />
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
-      <PageHeader
-        eyebrow="Studio overview"
-        title={`Welcome back, ${user?.name ?? "Duneworks"}`}
-        description="Production, clients, and cashflow for Duneworks — in one place."
-        actions={
-          <>
-            {allow("createRecords") ? (
-              <Button variant="outline" onClick={() => openDialog("client")}>
-                <Users />
-                Add company
-              </Button>
-            ) : null}
-            {allow("createRecords") ? (
-              <Button variant="outline" onClick={() => openDialog("project")}>
-                <Clapperboard />
-                Add project
-              </Button>
-            ) : null}
-            {allow("managePayments") ? (
-              <Button onClick={() => openDialog("payment")}>
-                <Plus />
-                Add payment
-              </Button>
-            ) : null}
-            <Button variant="outline" asChild>
-              <Link href="/pipeline">
-                <Columns3 />
-                Pipeline
-              </Link>
-            </Button>
-          </>
-        }
+      <DashboardHeader
+        name={user?.name ?? "Duneworks"}
+        role={user?.role ?? "Viewer"}
+        refreshing={refreshing}
+        unreadCount={unreadCount}
+        alerts={model.alerts}
+        readIds={local.readIds}
+        searchHits={searchHits}
+        canCreate={allow("createRecords")}
+        canPay={allow("managePayments")}
+        canManageUsers={allow("manageUsers")}
+        canManageSettings={allow("manageSettings")}
+        onRefresh={handleRefresh}
+        onSearch={setQuery}
+        onQuickAdd={(kind) => {
+          if (kind === "company") {
+            const first = data.stages.find((stage) => stage.kind === "possible") ?? data.stages[0];
+            openDialog("client", null, { stageId: first?.id ?? "" });
+            return;
+          }
+          if (kind === "client") {
+            const paid = data.stages.find((stage) => isPaidStage(stage));
+            openDialog("client", null, { stageId: paid?.id ?? "", intent: "client" });
+            return;
+          }
+          if (kind === "project") openDialog("project");
+          if (kind === "payment") openDialog("payment");
+          if (kind === "user") openDialog("user");
+        }}
+        onOpenTarget={openTarget}
+        onMarkRead={markRead}
+        onMarkAllRead={() => markAllRead(model.alerts.map((alert) => alert.id))}
+        onLogout={() => void logout()}
       />
-      {showFinance ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            label="Total revenue"
-            value={formatCurrency(totalRevenue, true)}
-            hint="Paid invoices"
-          />
-          <SummaryCard
-            label="Monthly revenue"
-            value={formatCurrency(thisMonth, true)}
-            hint="Paid this month"
-          />
-          <SummaryCard
-            label="Paid clients"
-            value={String(activeClients)}
-            hint={`${clients.length} in pipeline`}
-          />
-          <SummaryCard
-            label="Outstanding invoices"
-            value={String(outstanding)}
-            hint="Pending + overdue"
-          />
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <SummaryCard
-            label="Pipeline companies"
-            value={String(clients.length)}
-            hint="Across all stages"
-          />
-          <SummaryCard
-            label="Paid clients"
-            value={String(activeClients)}
-            hint="Available for productions"
-          />
-          <SummaryCard
-            label="Active projects"
-            value={String(projects.filter((project) => project.status !== "Delivered").length)}
-            hint="Not yet delivered"
-          />
-        </div>
-      )}
-      <div className="mt-4">
-        <Card className="glass-panel">
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Pipeline</CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/pipeline">
-                Open board
-                <ArrowUpRight />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {stages.map((stage) => (
-                <div
-                  key={stage.id}
-                  className="rounded-xl border border-border/70 bg-card/50 px-3 py-3"
-                >
-                  <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
-                    {stage.name}
-                  </p>
-                  <p className="font-heading mt-1 text-2xl">
-                    {clients.filter((client) => client.stageId === stage.id).length}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="mt-4">
-        <DatabaseStatusPanel compact />
-      </div>
-      {showFinance ? (
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Revenue over time</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chart}>
-                <defs>
-                  <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--gold)" stopOpacity={0.45} />
-                    <stop offset="100%" stopColor="var(--gold)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`}
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={42}
-                />
-                <Tooltip
-                  formatter={(value) => formatCurrency(Number(value))}
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="amount"
-                  stroke="var(--gold)"
-                  fill="url(#revenueFill)"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Upcoming deadlines</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No upcoming deadlines.</p>
-            ) : (
-              upcoming.map((project) => {
-                const client = clients.find((item) => item.id === project.clientId);
-                return (
-                  <button
-                    key={project.id}
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-left transition hover:border-primary/40"
-                    onClick={() => openDialog("projectDetail", project.id)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{project.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {client?.company} · {formatDate(project.deadline)}
-                      </p>
-                    </div>
-                    <ProjectStatusBadge status={project.status} />
-                  </button>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      ) : (
-        <Card className="glass-panel mt-6">
-          <CardHeader>
-            <CardTitle>Upcoming deadlines</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No upcoming deadlines.</p>
-            ) : (
-              upcoming.map((project) => {
-                const client = clients.find((item) => item.id === project.clientId);
-                return (
-                  <button
-                    key={project.id}
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-left transition hover:border-primary/40"
-                    onClick={() => openDialog("projectDetail", project.id)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{project.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {client?.company} · {formatDate(project.deadline)}
-                      </p>
-                    </div>
-                    <ProjectStatusBadge status={project.status} />
-                  </button>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-      )}
-      {allow("viewFinance") ? (
-      <Card className="glass-panel mt-6">
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Recent payments</CardTitle>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/finance">
-              View finance
-              <ArrowUpRight />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {recentPayments.map((payment) => {
-            const client = clients.find((item) => item.id === payment.clientId);
-            return (
-              <button
-                key={payment.id}
-                type="button"
-                className="flex w-full items-center justify-between rounded-xl border border-border/60 px-3 py-2 text-left transition hover:border-primary/40"
-                onClick={() => openDialog("paymentDetail", payment.id)}
-              >
-                <div>
-                  <p className="text-sm font-medium">{client?.company}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {payment.invoiceNumber} · {formatDate(payment.date)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-medium">{formatCurrency(payment.amount)}</span>
-                  <PaymentStatusBadge status={payment.status} />
-                </div>
-              </button>
-            );
-          })}
-        </CardContent>
-      </Card>
-      ) : null}
-    </PageTransition>
-  );
-}
 
-function SummaryCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
-      <Card className="glass-panel h-full">
-        <CardContent className="pt-1">
-          <p className="text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
-            {label}
-          </p>
-          <p className="font-heading mt-2 text-3xl">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-        </CardContent>
-      </Card>
-    </motion.div>
+      {error ? (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="size-4" />
+            {error}
+          </span>
+          <Button size="sm" variant="outline" onClick={handleRefresh}>
+            <RefreshCw />
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
+      <MetricCards metrics={model.metrics} onOpen={openMetric} />
+
+      <div className="mt-4">
+        <RevenuePipelineCharts
+          weekly={model.revenue.weekly}
+          monthly={model.revenue.monthly}
+          yearly={model.revenue.yearly}
+          weekChange={model.revenue.weekChange}
+          monthChange={model.revenue.monthChange}
+          yearChange={model.revenue.yearChange}
+          pipeline={model.pipeline}
+          showFinance={showFinance}
+          onOpenStage={(stageId) => {
+            const stage = model.pipeline.find((item) => item.id === stageId);
+            setDetail({
+              title: stage?.name ?? "Stage",
+              description: `${stage?.count ?? 0} companies · click to open a record`,
+              rows: model.stageDetails[stageId] ?? [],
+            });
+          }}
+          onOpenFinance={() => router.push("/finance")}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <ActivityFeed
+          entries={activity}
+          onOpen={openTarget}
+          onViewAll={() => setLogOpen(true)}
+        />
+        <AlertsPanel
+          alerts={model.alerts}
+          readIds={local.readIds}
+          onOpen={openTarget}
+          onMarkRead={markRead}
+          onMarkAllRead={() => markAllRead(model.alerts.map((alert) => alert.id))}
+        />
+      </div>
+
+      <div className="mt-4">
+        <RecentUpdates
+          companies={model.updates.companies}
+          clients={model.updates.clients}
+          payments={model.updates.payments}
+          projects={model.updates.projects}
+          showFinance={showPayments}
+          onOpen={openTarget}
+        />
+      </div>
+
+      <div className={showTeam ? "mt-4 grid gap-4 xl:grid-cols-2" : "mt-4"}>
+        <TasksPanel
+          items={model.upcoming}
+          clients={data.clients}
+          canCreate={allow("createRecords")}
+          onOpen={openTarget}
+          onToggle={(item, done) => {
+            if (item.source === "custom") toggleTask(item.id, done);
+            else toggleDerived(item.id, done);
+          }}
+          onAdd={addTask}
+        />
+        {showTeam ? (
+          <TeamOverview rows={model.team} canManage={allow("manageUsers")} />
+        ) : null}
+      </div>
+
+      <ActivityLogSheet
+        open={logOpen}
+        entries={activity}
+        onClose={() => setLogOpen(false)}
+        onOpen={(target) => {
+          setLogOpen(false);
+          openTarget(target);
+        }}
+      />
+      <DashboardDetailSheet
+        open={Boolean(detail)}
+        title={detail?.title ?? ""}
+        description={detail?.description}
+        rows={detail?.rows ?? []}
+        onClose={() => setDetail(null)}
+        onOpen={openTarget}
+      />
+    </PageTransition>
   );
 }

@@ -49,6 +49,7 @@ export function mapTeamMember(row: DbUser): TeamMember {
     email: row.email,
     role: normalizeRole(row.role),
     active: row.active,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -95,15 +96,24 @@ export function mapNote(row: DbNote): ClientNote {
   };
 }
 
+const ACTIVITY_TYPES: ClientActivity["type"][] = [
+  "created",
+  "stage_move",
+  "note",
+  "denied",
+  "updated",
+  "payment_received",
+  "project_created",
+  "project_completed",
+];
+
 export function mapActivity(row: DbActivity): ClientActivity {
   const type = row.type as ClientActivity["type"];
   return {
     id: row.id,
     clientId: row.clientId,
     userId: row.userId,
-    type: ["created", "stage_move", "note", "denied", "updated"].includes(type)
-      ? type
-      : "updated",
+    type: ACTIVITY_TYPES.includes(type) ? type : "updated",
     fromStage: row.fromStage,
     toStage: row.toStage,
     reason: row.reason,
@@ -125,6 +135,7 @@ export function mapProject(row: DbProject): Project {
     notes: row.notes,
     checklist: parseJson<ChecklistItem[]>(row.checklist, []),
     createdAt: toDateOnly(row.createdAt),
+    updatedAt: toDateOnly(row.updatedAt),
   };
 }
 
@@ -139,6 +150,7 @@ export function mapPayment(row: DbPayment): Payment {
     method: row.method as PaymentMethod,
     invoiceNumber: row.invoiceNumber,
     notes: row.notes,
+    createdAt: toDateOnly(row.createdAt),
   };
 }
 

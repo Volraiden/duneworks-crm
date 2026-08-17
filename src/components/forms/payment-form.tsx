@@ -27,7 +27,7 @@ export function PaymentForm({
   clients: Client[];
   projects: Project[];
   preset?: { clientId?: string; projectId?: string };
-  onSubmit: (values: Omit<Payment, "id">) => void | Promise<void>;
+  onSubmit: (values: Omit<Payment, "id" | "createdAt">) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [clientId, setClientId] = useState(

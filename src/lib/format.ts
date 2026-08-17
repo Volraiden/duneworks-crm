@@ -1,4 +1,4 @@
-import { format, parseISO, isValid } from "date-fns";
+import { format, formatDistanceToNow, parseISO, isValid } from "date-fns";
 
 export function formatCurrency(value: number, compact = false) {
   return new Intl.NumberFormat("en-US", {
@@ -17,6 +17,17 @@ export function formatDate(value: string, pattern = "MMM d, yyyy") {
 
 export function formatShortDate(value: string) {
   return formatDate(value, "MMM d");
+}
+
+export function formatRelativeTime(value: string) {
+  const date = parseFlexible(value);
+  if (!isValid(date)) return value;
+  return formatDistanceToNow(date, { addSuffix: true });
+}
+
+function parseFlexible(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return parseISO(`${value}T12:00:00`);
+  return parseISO(value);
 }
 
 export function toDateInput(value: string) {
