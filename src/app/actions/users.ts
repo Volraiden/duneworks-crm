@@ -55,6 +55,8 @@ export async function saveUser(input: {
     }
 
     const row = await prisma.user.update({ where: { id: input.id }, data });
+    const { persistStudioDatabase } = await import("@/lib/prisma");
+    await persistStudioDatabase();
     return { ok: true, id: row.id };
   }
 
@@ -74,6 +76,8 @@ export async function saveUser(input: {
       passwordHash: await bcrypt.hash(input.password, 12),
     },
   });
+  const { persistStudioDatabase } = await import("@/lib/prisma");
+  await persistStudioDatabase();
   return { ok: true, id: row.id };
 }
 
@@ -91,5 +95,7 @@ export async function deleteUser(id: string): Promise<{ ok: true } | { ok: false
   }
 
   await prisma.user.delete({ where: { id } });
+  const { persistStudioDatabase } = await import("@/lib/prisma");
+  await persistStudioDatabase();
   return { ok: true };
 }

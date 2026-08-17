@@ -49,17 +49,6 @@ export async function ensureStudioSeed(prisma: PrismaClient) {
         active: true,
       },
     });
-  } else {
-    const adminHash = await bcrypt.hash(STUDIO_ADMIN.password, 10);
-    await prisma.user.update({
-      where: { id: existingAdmin.id },
-      data: {
-        name: STUDIO_ADMIN.name,
-        role: STUDIO_ADMIN.role,
-        active: true,
-        passwordHash: adminHash,
-      },
-    });
   }
 
   await prisma.user.updateMany({

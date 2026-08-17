@@ -3,10 +3,30 @@ import path from "node:path";
 import { createClient } from "@libsql/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PrismaClient } from "@/generated/prisma/client";
+import {
+  applySqliteSnapshot,
+  persistSqliteFile,
+  readSqliteSnapshot,
+  usesDurableSqliteStore,
+} from "@/lib/sqlite-blob";
+
+const WRITE_OPERATIONS = new Set([
+  "create",
+  "createMany",
+  "createManyAndReturn",
+  "update",
+  "updateMany",
+  "updateManyAndReturn",
+  "upsert",
+  "delete",
+  "deleteMany",
+]);
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   prismaReady?: Promise<PrismaClient>;
+  sqliteEtag?: string;
+  durableLock?: Promise<PrismaClient>;
 };
 
 export function isRemoteDatabase() {
@@ -82,22 +102,93 @@ async function ensureLocalSchema(filePath: string) {
   }
 }
 
+function withDurableWrites(client: PrismaClient, filePath: string) {
+  if (!usesDurableSqliteStore()) return client;
+
+  return client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ operation, args, query }) {
+          const result = await query(args);
+          if (WRITE_OPERATIONS.has(operation)) {
+            try {
+              const etag = await persistSqliteFile(filePath);
+              if (etag) globalForPrisma.sqliteEtag = etag;
+            } catch {
+              /* user actions also call persistStudioDatabase() */
+            }
+          }
+          return result;
+        },
+      },
+    },
+  }) as unknown as PrismaClient;
+}
+
 async function createPrismaClient() {
+  const filePath = getSqliteFilePath();
   if (!isRemoteDatabase()) {
-    await ensureLocalSchema(getSqliteFilePath());
+    await ensureLocalSchema(filePath);
   }
 
   const adapter = new PrismaLibSql({
     url: getDatabaseUrl(),
     authToken: process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN,
   });
-  const client = new PrismaClient({ adapter });
+  const raw = new PrismaClient({ adapter });
   const { ensureStudioSeed } = await import("@/lib/seed");
-  await ensureStudioSeed(client);
+  await ensureStudioSeed(raw);
+  const client = withDurableWrites(raw, filePath);
+  if (usesDurableSqliteStore()) {
+    try {
+      const etag = await persistSqliteFile(filePath);
+      if (etag) globalForPrisma.sqliteEtag = etag;
+    } catch {
+      /* Blobs may be unavailable during build; runtime writes still persist. */
+    }
+  }
   return client;
 }
 
+async function getDurableSqliteClient() {
+  const filePath = getSqliteFilePath();
+  const snapshot = await readSqliteSnapshot(globalForPrisma.sqliteEtag);
+
+  if (globalForPrisma.prisma && snapshot.unchanged) {
+    return globalForPrisma.prisma;
+  }
+
+  if (snapshot.bytes) {
+    applySqliteSnapshot(filePath, snapshot.bytes);
+  }
+  if (snapshot.etag) globalForPrisma.sqliteEtag = snapshot.etag;
+
+  if (globalForPrisma.prisma) {
+    await globalForPrisma.prisma.$disconnect().catch(() => undefined);
+    globalForPrisma.prisma = undefined;
+  }
+
+  const client = await createPrismaClient();
+  globalForPrisma.prisma = client;
+  return client;
+}
+
+export async function persistStudioDatabase() {
+  if (!usesDurableSqliteStore()) return;
+  const etag = await persistSqliteFile(getSqliteFilePath());
+  if (etag) globalForPrisma.sqliteEtag = etag;
+}
+
 export function getPrisma() {
+  if (usesDurableSqliteStore()) {
+    if (!globalForPrisma.durableLock) {
+      globalForPrisma.durableLock = getDurableSqliteClient().finally(() => {
+        globalForPrisma.durableLock = undefined;
+      });
+    }
+    return globalForPrisma.durableLock;
+  }
+
   if (globalForPrisma.prisma) {
     return Promise.resolve(globalForPrisma.prisma);
   }

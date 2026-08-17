@@ -38,7 +38,7 @@ export interface DatabaseStatus {
 
 function hostingLabel() {
   if (isRemoteDatabase()) return "Turso / libSQL cloud";
-  if (isNetlifyHost()) return "Netlify";
+  if (isNetlifyHost()) return "Netlify persistent store";
   if (process.env.VERCEL) return "Vercel";
   if (process.env.NODE_ENV === "production") return "Production host";
   return "Local machine";
