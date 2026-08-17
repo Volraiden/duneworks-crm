@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookOpen,
   CalendarDays,
   Columns3,
   LayoutDashboard,
@@ -39,6 +40,7 @@ const NAV: {
   { href: "/projects", label: "Projects", icon: Clapperboard },
   { href: "/finance", label: "Finance", icon: Wallet, permission: "viewFinance" },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/guide", label: "Guide", icon: BookOpen },
   { href: "/team", label: "Team & Permissions", icon: Shield, permission: "manageUsers" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "manageSettings" },
 ];

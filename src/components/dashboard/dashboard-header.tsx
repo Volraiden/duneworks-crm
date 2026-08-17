@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { format } from "date-fns";
 import {
   Bell,
+  BookOpen,
   Building2,
   ChevronDown,
   Clapperboard,
@@ -227,6 +228,12 @@ export function DashboardHeader({
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuLabel>{role} access</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/guide">
+                  <BookOpen />
+                  Studio guide
+                </Link>
+              </DropdownMenuItem>
               {canManageUsers ? (
                 <DropdownMenuItem asChild>
                   <Link href="/team">
