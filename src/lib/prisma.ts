@@ -70,8 +70,8 @@ async function ensureLocalSchema(filePath: string) {
       return;
     }
 
-    if (!names.has("PossibleClient")) {
-      const folder = folders.find((name) => name.includes("possible_clients"));
+    if (!names.has("PipelineStage")) {
+      const folder = folders.find((name) => name.includes("pipeline"));
       if (folder) {
         const sql = readFileSync(path.join(root, folder, "migration.sql"), "utf8");
         await client.executeMultiple(sql);
@@ -91,7 +91,10 @@ async function createPrismaClient() {
     url: getDatabaseUrl(),
     authToken: process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN,
   });
-  return new PrismaClient({ adapter });
+  const client = new PrismaClient({ adapter });
+  const { ensureStudioSeed } = await import("@/lib/seed");
+  await ensureStudioSeed(client);
+  return client;
 }
 
 export function getPrisma() {

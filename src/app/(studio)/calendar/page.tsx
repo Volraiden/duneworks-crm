@@ -20,10 +20,12 @@ import { EventTypeDot, eventTypeColor, eventTypeLabel } from "@/components/statu
 import { Button } from "@/components/ui/button";
 import { EVENT_TYPES } from "@/lib/types";
 import { useCrm } from "@/context/crm-context";
+import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
 
 export default function CalendarPage() {
   const { data, openDialog, deleteEvent } = useCrm();
+  const { allow } = useAuth();
   const [cursor, setCursor] = useState(new Date(2026, 7, 1));
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -44,6 +46,7 @@ export default function CalendarPage() {
         title="Calendar"
         description="Deadlines, meetings, shoots, and payment dates — color-coded by type."
         actions={
+          allow("createRecords") ? (
           <Button
             onClick={() =>
               openDialog("event", null, {
@@ -54,6 +57,7 @@ export default function CalendarPage() {
             <Plus />
             Add event
           </Button>
+          ) : null
         }
       />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -145,6 +149,7 @@ export default function CalendarPage() {
             ) : selectedEvents.length === 0 ? (
               <div>
                 <p className="text-sm text-muted-foreground">No events on this day.</p>
+                {allow("createRecords") ? (
                 <Button
                   className="mt-3"
                   size="sm"
@@ -152,6 +157,7 @@ export default function CalendarPage() {
                 >
                   Add event
                 </Button>
+                ) : null}
               </div>
             ) : (
               selectedEvents.map((event) => (
@@ -172,6 +178,7 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <div className="mt-3 flex gap-2">
+                    {allow("editRecords") ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -179,6 +186,8 @@ export default function CalendarPage() {
                     >
                       Edit
                     </Button>
+                    ) : null}
+                    {allow("deleteRecords") ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -186,6 +195,7 @@ export default function CalendarPage() {
                     >
                       Delete
                     </Button>
+                    ) : null}
                   </div>
                 </div>
               ))

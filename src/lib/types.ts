@@ -1,4 +1,6 @@
-export const CLIENT_STATUSES = ["Lead", "Active", "Paused", "Completed"] as const;
+import type { Role } from "@/lib/permissions";
+
+export const CLIENT_STATUSES = ["Lead", "Active", "Paused", "Completed", "Denied"] as const;
 export type ClientStatus = (typeof CLIENT_STATUSES)[number];
 
 export const PROJECT_STATUSES = [
@@ -34,15 +36,30 @@ export const CLIENT_TAGS = [
 ] as const;
 export type ClientTag = (typeof CLIENT_TAGS)[number];
 
+export const CLIENT_SOURCES = [
+  "Referral",
+  "Website",
+  "Instagram",
+  "Cold outreach",
+  "Repeat inquiry",
+  "Festival",
+] as const;
+export type ClientSource = (typeof CLIENT_SOURCES)[number];
+
 export const APPEARANCE_OPTIONS = ["dark", "light", "system"] as const;
 export type Appearance = (typeof APPEARANCE_OPTIONS)[number];
 
-export const POSSIBLE_CLIENT_OUTCOMES = [
-  "Needed the service",
-  "Will let us know",
-  "Said no",
+export const STAGE_KINDS = [
+  "possible",
+  "contacted",
+  "demo",
+  "discussion",
+  "trial",
+  "paid",
+  "denied",
+  "custom",
 ] as const;
-export type PossibleClientOutcome = (typeof POSSIBLE_CLIENT_OUTCOMES)[number];
+export type StageKind = (typeof STAGE_KINDS)[number];
 
 export interface ChecklistItem {
   id: string;
@@ -50,15 +67,59 @@ export interface ChecklistItem {
   done: boolean;
 }
 
-export interface Client {
+export interface TeamMember {
   id: string;
   name: string;
+  email: string;
+  role: Role;
+  active: boolean;
+}
+
+export interface PipelineStage {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  sortOrder: number;
+  kind: StageKind;
+}
+
+export interface ClientNote {
+  id: string;
+  clientId: string;
+  userId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface ClientActivity {
+  id: string;
+  clientId: string;
+  userId: string | null;
+  type: "created" | "stage_move" | "note" | "denied" | "updated";
+  fromStage: string;
+  toStage: string;
+  reason: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Client {
+  id: string;
+  clientNumber: string;
+  name: string;
   company: string;
+  industry: string;
   email: string;
   phone: string;
+  potentialValue: number;
+  source: string;
+  assignedUserId: string | null;
+  stageId: string;
   status: ClientStatus;
   tags: string[];
   notes: string;
+  sortOrder: number;
   createdAt: string;
   lastActivity: string;
 }
@@ -99,15 +160,6 @@ export interface CalendarEvent {
   projectId?: string;
 }
 
-export interface PossibleClient {
-  id: string;
-  company: string;
-  phone: string;
-  outcome: PossibleClientOutcome;
-  notes: string;
-  createdAt: string;
-}
-
 export interface NotificationPrefs {
   projectDeadlines: boolean;
   paymentReminders: boolean;
@@ -130,7 +182,10 @@ export interface CrmData {
   projects: Project[];
   payments: Payment[];
   events: CalendarEvent[];
-  possibleClients: PossibleClient[];
+  stages: PipelineStage[];
+  team: TeamMember[];
+  notes: ClientNote[];
+  activities: ClientActivity[];
   settings: StudioSettings;
 }
 
@@ -139,13 +194,27 @@ export type DialogKind =
   | "project"
   | "payment"
   | "event"
-  | "possibleClient"
   | "clientDetail"
   | "projectDetail"
-  | "paymentDetail";
+  | "paymentDetail"
+  | "stage"
+  | "deny";
 
 export interface DialogState {
   kind: DialogKind | null;
   id: string | null;
   preset?: Record<string, string>;
+}
+
+export function isPaidClient(client: Client, stages: PipelineStage[]) {
+  const stage = stages.find((item) => item.id === client.stageId);
+  return client.status === "Active" || stage?.kind === "paid";
+}
+
+export function isDeniedStage(stage: PipelineStage | undefined) {
+  return stage?.kind === "denied";
+}
+
+export function isPaidStage(stage: PipelineStage | undefined) {
+  return stage?.kind === "paid";
 }

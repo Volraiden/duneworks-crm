@@ -8,13 +8,20 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   name         String
-  email        String   @unique
+  email        String           @unique
   passwordHash String
-  role         String   @default("Studio Lead")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         String           @default("Viewer")
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  assignedClients Client[]      @relation("AssignedClients")
+  notes        ClientNote[]
+  activities   ClientActivity[]
+
+  @@index([role])
+  @@index([active])
 }
 
 model StudioSettings {
@@ -33,24 +40,82 @@ model StudioSettings {
   updatedAt         DateTime @updatedAt
 }
 
+model PipelineStage {
+  id        String   @id
+  name      String
+  slug      String   @unique
+  color     String
+  sortOrder Int
+  kind      String   @default("custom")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  clients   Client[]
+
+  @@index([sortOrder])
+}
+
 model Client {
-  id           String          @id @default(cuid())
-  name         String
-  company      String
-  email        String
-  phone        String          @default("")
-  status       String
-  tags         String          @default("[]")
-  notes        String          @default("")
-  lastActivity DateTime        @default(now())
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  projects     Project[]
-  payments     Payment[]
-  events       CalendarEvent[]
+  id             String           @id @default(cuid())
+  clientNumber   String           @unique
+  name           String
+  company        String
+  industry       String           @default("")
+  email          String           @default("")
+  phone          String           @default("")
+  potentialValue Float            @default(0)
+  source         String           @default("")
+  assignedUserId String?
+  assignedUser   User?            @relation("AssignedClients", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  stageId        String           @default("stage_possible")
+  stage          PipelineStage    @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  status         String           @default("Lead")
+  tags           String           @default("[]")
+  notes          String           @default("")
+  sortOrder      Int              @default(0)
+  lastActivity   DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  projects       Project[]
+  payments       Payment[]
+  events         CalendarEvent[]
+  clientNotes    ClientNote[]
+  activities     ClientActivity[]
 
   @@index([status])
   @@index([company])
+  @@index([stageId])
+  @@index([assignedUserId])
+  @@index([source])
+}
+
+model ClientNote {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([createdAt])
+}
+
+model ClientActivity {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  fromStage String   @default("")
+  toStage   String   @default("")
+  reason    String   @default("")
+  body      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([createdAt])
 }
 
 model Project {
@@ -111,17 +176,4 @@ model CalendarEvent {
 
   @@index([date])
   @@index([type])
-}
-
-model PossibleClient {
-  id        String   @id @default(cuid())
-  company   String
-  phone     String
-  outcome   String
-  notes     String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([outcome])
-  @@index([company])
 }

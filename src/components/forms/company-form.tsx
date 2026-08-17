@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -12,27 +14,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CLIENT_STATUSES, CLIENT_TAGS } from "@/lib/types";
-import type { Client } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { CLIENT_SOURCES, CLIENT_TAGS } from "@/lib/types";
+import type { Client, PipelineStage, TeamMember } from "@/lib/types";
 
-export function ClientForm({
+export function CompanyForm({
   client,
+  stages,
+  team,
   onSubmit,
   onCancel,
 }: {
   client?: Client;
+  stages: PipelineStage[];
+  team: TeamMember[];
   onSubmit: (
-    values: Omit<Client, "id" | "createdAt" | "lastActivity">
+    values: Omit<Client, "id" | "createdAt" | "lastActivity" | "clientNumber" | "sortOrder">
   ) => void | Promise<void>;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(client?.name ?? "");
   const [company, setCompany] = useState(client?.company ?? "");
+  const [industry, setIndustry] = useState(client?.industry ?? "");
+  const [name, setName] = useState(client?.name ?? "");
   const [email, setEmail] = useState(client?.email ?? "");
   const [phone, setPhone] = useState(client?.phone ?? "");
-  const [status, setStatus] = useState(client?.status ?? "Lead");
+  const [potentialValue, setPotentialValue] = useState(
+    String(client?.potentialValue ?? "")
+  );
+  const [source, setSource] = useState(client?.source || CLIENT_SOURCES[0]);
+  const [assignedUserId, setAssignedUserId] = useState(client?.assignedUserId ?? "");
+  const [stageId, setStageId] = useState(client?.stageId ?? stages[0]?.id ?? "");
   const [tags, setTags] = useState<string[]>(client?.tags ?? []);
   const [customTag, setCustomTag] = useState("");
   const [notes, setNotes] = useState(client?.notes ?? "");
@@ -42,12 +52,16 @@ export function ClientForm({
     () => CLIENT_TAGS.filter((tag) => !tags.includes(tag)),
     [tags]
   );
+  const activeTeam = team.filter((member) => member.active);
 
   function validate() {
     const next: Record<string, string> = {};
-    if (!name.trim()) next.name = "Name is required.";
-    if (!company.trim()) next.company = "Company is required.";
-    if (!email.trim() || !email.includes("@")) next.email = "Valid email required.";
+    if (!company.trim()) next.company = "Company name is required.";
+    if (!name.trim()) next.name = "Contact name is required.";
+    if (Number.isNaN(Number(potentialValue)) || Number(potentialValue) < 0) {
+      next.potentialValue = "Enter a valid potential value.";
+    }
+    if (!stageId) next.stageId = "Choose a pipeline stage.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -59,43 +73,86 @@ export function ClientForm({
         event.preventDefault();
         if (!validate()) return;
         await onSubmit({
-          name: name.trim(),
           company: company.trim(),
+          industry: industry.trim(),
+          name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          status,
+          potentialValue: Number(potentialValue || 0),
+          source,
+          assignedUserId: assignedUserId || null,
+          stageId,
+          status: client?.status ?? "Lead",
           tags,
           notes,
         });
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Client name" error={errors.name}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        <Field label="Company" error={errors.company}>
+        <Field label="Company name" error={errors.company}>
           <Input value={company} onChange={(e) => setCompany(e.target.value)} />
         </Field>
-        <Field label="Email" error={errors.email}>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <Field label="Industry">
+          <Input value={industry} onChange={(e) => setIndustry(e.target.value)} />
+        </Field>
+        <Field label="Contact person" error={errors.name}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Email">
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
         <Field label="Phone">
           <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
         </Field>
+        <Field label="Potential value" error={errors.potentialValue}>
+          <Input
+            inputMode="decimal"
+            value={potentialValue}
+            onChange={(e) => setPotentialValue(e.target.value)}
+          />
+        </Field>
+        <Field label="Source">
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CLIENT_SOURCES.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {item}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Assigned user">
+          <Select
+            value={assignedUserId || "unassigned"}
+            onValueChange={(value) => setAssignedUserId(value === "unassigned" ? "" : value)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {activeTeam.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
       </div>
-      <Field label="Status">
-        <Select value={status} onValueChange={(value) => setStatus(value as typeof status)}>
+      <Field label="Pipeline stage" error={errors.stageId}>
+        <Select value={stageId} onValueChange={setStageId}>
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CLIENT_STATUSES.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item}
+            {stages.map((stage) => (
+              <SelectItem key={stage.id} value={stage.id}>
+                {stage.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -156,7 +213,7 @@ export function ClientForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit">{client ? "Save client" : "Add client"}</Button>
+        <Button type="submit">{client ? "Save company" : "Add company"}</Button>
       </div>
     </form>
   );

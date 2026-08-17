@@ -9,19 +9,20 @@ import {
   useState,
 } from "react";
 import {
+  addClientNote,
   getCrmData,
+  moveClient,
   removeClient,
   removeEvent,
   removePayment,
-  removePossibleClient,
   removeProject,
   saveClient,
   saveEvent,
   savePayment,
-  savePossibleClient,
   saveProject,
   saveSettings,
 } from "@/app/actions/crm";
+import { deleteStage, reorderStages, saveStage } from "@/app/actions/pipeline";
 import { EMPTY_CRM_DATA } from "@/lib/empty-data";
 import type {
   CalendarEvent,
@@ -29,7 +30,6 @@ import type {
   CrmData,
   DialogState,
   Payment,
-  PossibleClient,
   Project,
   StudioSettings,
 } from "@/lib/types";
@@ -44,10 +44,21 @@ interface CrmContextValue {
     preset?: Record<string, string>
   ) => void;
   closeDialog: () => void;
+  refresh: () => Promise<void>;
   upsertClient: (
-    input: Omit<Client, "id" | "createdAt" | "lastActivity"> & { id?: string }
+    input: Omit<Client, "id" | "createdAt" | "lastActivity" | "clientNumber" | "sortOrder"> & {
+      id?: string;
+    }
   ) => Promise<string>;
   deleteClient: (id: string) => Promise<void>;
+  moveCompany: (input: {
+    id: string;
+    stageId: string;
+    reason?: string;
+    notes?: string;
+    beforeId?: string | null;
+  }) => Promise<void>;
+  addNote: (clientId: string, body: string) => Promise<void>;
   upsertProject: (
     input: Omit<Project, "id" | "createdAt"> & { id?: string }
   ) => Promise<string>;
@@ -58,11 +69,10 @@ interface CrmContextValue {
     input: Omit<CalendarEvent, "id"> & { id?: string }
   ) => Promise<string>;
   deleteEvent: (id: string) => Promise<void>;
-  upsertPossibleClient: (
-    input: Omit<PossibleClient, "id" | "createdAt"> & { id?: string }
-  ) => Promise<string>;
-  deletePossibleClient: (id: string) => Promise<void>;
   updateSettings: (patch: Partial<StudioSettings>) => Promise<void>;
+  upsertStage: (input: { id?: string; name: string; color: string }) => Promise<string>;
+  removeStage: (id: string) => Promise<{ ok: boolean; error?: string }>;
+  sortStages: (ids: string[]) => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextValue | null>(null);
@@ -109,6 +119,22 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const deleteClient = useCallback(
     async (id: string) => {
       await removeClient(id);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const moveCompany: CrmContextValue["moveCompany"] = useCallback(
+    async (input) => {
+      await moveClient(input);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const addNote = useCallback(
+    async (clientId: string, body: string) => {
+      await addClientNote(clientId, body);
       await refresh();
     },
     [refresh]
@@ -165,26 +191,36 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     [refresh]
   );
 
-  const upsertPossibleClient: CrmContextValue["upsertPossibleClient"] = useCallback(
-    async (input) => {
-      const id = await savePossibleClient(input);
-      await refresh();
-      return id;
-    },
-    [refresh]
-  );
-
-  const deletePossibleClient = useCallback(
-    async (id: string) => {
-      await removePossibleClient(id);
-      await refresh();
-    },
-    [refresh]
-  );
-
   const updateSettings = useCallback(
     async (patch: Partial<StudioSettings>) => {
       await saveSettings(patch);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const upsertStage = useCallback(
+    async (input: { id?: string; name: string; color: string }) => {
+      const result = await saveStage(input);
+      if (!result.ok) throw new Error(result.error);
+      await refresh();
+      return result.id;
+    },
+    [refresh]
+  );
+
+  const removeStage = useCallback(
+    async (id: string) => {
+      const result = await deleteStage(id);
+      if (result.ok) await refresh();
+      return result;
+    },
+    [refresh]
+  );
+
+  const sortStages = useCallback(
+    async (ids: string[]) => {
+      await reorderStages(ids);
       await refresh();
     },
     [refresh]
@@ -197,35 +233,43 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       dialog,
       openDialog,
       closeDialog,
+      refresh,
       upsertClient,
       deleteClient,
+      moveCompany,
+      addNote,
       upsertProject,
       deleteProject,
       upsertPayment,
       deletePayment,
       upsertEvent,
       deleteEvent,
-      upsertPossibleClient,
-      deletePossibleClient,
       updateSettings,
+      upsertStage,
+      removeStage,
+      sortStages,
     }),
     [
+      addNote,
       closeDialog,
       data,
       deleteClient,
       deleteEvent,
       deletePayment,
-      deletePossibleClient,
       deleteProject,
       dialog,
+      moveCompany,
       openDialog,
       ready,
+      refresh,
+      removeStage,
+      sortStages,
       updateSettings,
       upsertClient,
       upsertEvent,
       upsertPayment,
-      upsertPossibleClient,
       upsertProject,
+      upsertStage,
     ]
   );
 

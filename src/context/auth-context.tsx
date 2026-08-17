@@ -9,27 +9,17 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import {
-  getAuthStatus,
-  loginStudio,
-  logoutStudio,
-  registerStudio,
-} from "@/app/actions/auth";
+import { getAuthStatus, loginStudio, logoutStudio } from "@/app/actions/auth";
+import { can, type Permission } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session-token";
 
 interface AuthContextValue {
   ready: boolean;
   authenticated: boolean;
-  needsSetup: boolean;
   user: SessionUser | null;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (input: {
-    name: string;
-    email: string;
-    password: string;
-    studioName: string;
-  }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
+  allow: (permission: Permission) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,13 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [authenticated, setIsAuthed] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
 
   const refresh = useCallback(async () => {
     const status = await getAuthStatus();
     setIsAuthed(status.authenticated);
-    setNeedsSetup(status.needsSetup);
     setUser(status.user);
     setReady(true);
   }, []);
@@ -53,24 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await loginStudio({ email, password });
-    if (!result.ok) return false;
-    await refresh();
-    return true;
-  }, [refresh]);
-
-  const register = useCallback(
-    async (input: {
-      name: string;
-      email: string;
-      password: string;
-      studioName: string;
-    }) => {
-      const result = await registerStudio(input);
-      if (!result.ok) return { ok: false, error: result.error };
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const result = await loginStudio({ email, password });
+      if (!result.ok) return false;
       await refresh();
-      return { ok: true };
+      return true;
     },
     [refresh]
   );
@@ -82,17 +58,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }, [router]);
 
+  const allow = useCallback(
+    (permission: Permission) => (user ? can(user.role, permission) : false),
+    [user]
+  );
+
   const value = useMemo(
     () => ({
       ready,
       authenticated,
-      needsSetup,
       user,
       login,
-      register,
       logout,
+      allow,
     }),
-    [authenticated, login, logout, needsSetup, ready, register, user]
+    [allow, authenticated, login, logout, ready, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

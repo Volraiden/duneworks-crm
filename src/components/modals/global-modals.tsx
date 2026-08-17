@@ -1,12 +1,12 @@
 "use client";
 
 import { toast } from "sonner";
-import { ClientForm } from "@/components/forms/client-form";
+import { CompanyForm } from "@/components/forms/company-form";
+import { StageForm } from "@/components/forms/stage-form";
 import { ProjectForm } from "@/components/forms/project-form";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { EventForm } from "@/components/forms/event-form";
-import { PossibleClientForm } from "@/components/forms/possible-client-form";
-import { ClientDetail } from "@/components/clients/client-detail";
+import { CompanyDetail } from "@/components/clients/company-detail";
 import { ProjectDetail } from "@/components/projects/project-detail";
 import { InvoiceModal } from "@/components/finance/invoice-modal";
 import {
@@ -22,8 +22,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useCrm } from "@/context/crm-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/context/auth-context";
+import { useCrm } from "@/context/crm-context";
+import { isPaidClient } from "@/lib/types";
 
 export function GlobalModals() {
   const {
@@ -35,63 +37,91 @@ export function GlobalModals() {
     upsertProject,
     upsertPayment,
     upsertEvent,
-    upsertPossibleClient,
-    deletePossibleClient,
+    upsertStage,
+    removeStage,
+    sortStages,
+    addNote,
+    deleteClient,
   } = useCrm();
+  const { allow } = useAuth();
 
   const editingClient = data.clients.find((client) => client.id === dialog.id);
   const editingProject = data.projects.find((project) => project.id === dialog.id);
   const editingPayment = data.payments.find((payment) => payment.id === dialog.id);
   const editingEvent = data.events.find((event) => event.id === dialog.id);
-  const editingPossibleClient = data.possibleClients.find(
-    (prospect) => prospect.id === dialog.id
-  );
+  const paidClients = data.clients.filter((client) => isPaidClient(client, data.stages));
 
   return (
     <>
-      <Dialog
-        open={dialog.kind === "client"}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={dialog.kind === "client"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>
-              {editingClient ? "Edit client" : "Add client"}
-            </DialogTitle>
+            <DialogTitle>{editingClient ? "Edit company" : "Add company"}</DialogTitle>
             <DialogDescription>
-              Keep contact details, status, and production tags in one place.
+              Log company, contact, value, and the first pipeline stage.
             </DialogDescription>
           </DialogHeader>
-          <ClientForm
-            key={dialog.id ?? "new-client"}
+          <CompanyForm
+            key={dialog.id ?? "new-company"}
             client={editingClient}
+            stages={data.stages}
+            team={data.team}
             onCancel={closeDialog}
             onSubmit={async (values) => {
               await upsertClient({ ...values, id: editingClient?.id });
-              toast.success(editingClient ? "Client updated" : "Client added");
+              toast.success(editingClient ? "Company updated" : "Company added");
               closeDialog();
             }}
           />
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={dialog.kind === "project"}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
+      <Dialog open={dialog.kind === "stage"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Pipeline categories</DialogTitle>
+            <DialogDescription>
+              Create, rename, color-code, reorder, or delete custom stages.
+            </DialogDescription>
+          </DialogHeader>
+          <StageForm
+            stages={data.stages}
+            onCancel={closeDialog}
+            onSave={async (input) => {
+              await upsertStage(input);
+              toast.success(input.id ? "Category updated" : "Category created");
+            }}
+            onReorder={sortStages}
+            onDelete={async (id) => {
+              const result = await removeStage(id);
+              if (!result.ok) toast.error(result.error);
+              else toast.success("Category removed");
+              return result;
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog.kind === "project"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>
-              {editingProject ? "Edit project" : "Add project"}
-            </DialogTitle>
+            <DialogTitle>{editingProject ? "Edit project" : "Add project"}</DialogTitle>
             <DialogDescription>
-              Link a production to a client and track budget, deadline, and stage.
+              Projects are available for paid clients in the pipeline.
             </DialogDescription>
           </DialogHeader>
           <ProjectForm
             key={dialog.id ?? "new-project"}
             project={editingProject}
-            clients={data.clients}
+            clients={
+              editingProject
+                ? data.clients.filter(
+                    (client) =>
+                      client.id === editingProject.clientId ||
+                      paidClients.some((item) => item.id === client.id)
+                  )
+                : paidClients
+            }
             presetClientId={dialog.preset?.clientId}
             onCancel={closeDialog}
             onSubmit={async (values) => {
@@ -103,23 +133,24 @@ export function GlobalModals() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={dialog.kind === "payment"}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
+      <Dialog open={dialog.kind === "payment"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {editingPayment ? "Edit payment" : "Add payment"}
-            </DialogTitle>
-            <DialogDescription>
-              Log invoices and keep paid, pending, and overdue amounts accurate.
-            </DialogDescription>
+            <DialogTitle>{editingPayment ? "Edit payment" : "Add payment"}</DialogTitle>
+            <DialogDescription>Invoices for paid clients and their productions.</DialogDescription>
           </DialogHeader>
           <PaymentForm
             key={dialog.id ?? "new-payment"}
             payment={editingPayment}
-            clients={data.clients}
+            clients={
+              editingPayment
+                ? data.clients.filter(
+                    (client) =>
+                      client.id === editingPayment.clientId ||
+                      paidClients.some((item) => item.id === client.id)
+                  )
+                : paidClients
+            }
             projects={data.projects}
             preset={{
               clientId: dialog.preset?.clientId,
@@ -135,10 +166,7 @@ export function GlobalModals() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={dialog.kind === "event"}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
+      <Dialog open={dialog.kind === "event"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit event" : "Add event"}</DialogTitle>
@@ -162,64 +190,38 @@ export function GlobalModals() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={dialog.kind === "possibleClient"}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {editingPossibleClient ? "Edit possible client" : "Log possible client"}
-            </DialogTitle>
-            <DialogDescription>
-              Company, phone, and whether they needed the service, will let you know, or said no.
-            </DialogDescription>
-          </DialogHeader>
-          <PossibleClientForm
-            key={dialog.id ?? "new-possible-client"}
-            prospect={editingPossibleClient}
-            onCancel={closeDialog}
-            onDelete={
-              editingPossibleClient
-                ? async () => {
-                    await deletePossibleClient(editingPossibleClient.id);
-                    toast.success("Possible client removed");
-                    closeDialog();
-                  }
-                : undefined
-            }
-            onSubmit={async (values) => {
-              await upsertPossibleClient({ ...values, id: editingPossibleClient?.id });
-              toast.success(
-                editingPossibleClient ? "Possible client updated" : "Possible client logged"
-              );
-              closeDialog();
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-
-      <Sheet
-        open={dialog.kind === "clientDetail"}
-        onOpenChange={(open) => !open && closeDialog()}
-      >
+      <Sheet open={dialog.kind === "clientDetail"} onOpenChange={(open) => !open && closeDialog()}>
         <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Client</SheetTitle>
+            <SheetTitle>Company</SheetTitle>
           </SheetHeader>
           <ScrollArea className="h-[calc(100vh-5rem)] px-4 pb-8">
             {editingClient ? (
-              <ClientDetail
+              <CompanyDetail
                 client={editingClient}
+                stage={data.stages.find((stage) => stage.id === editingClient.stageId)}
+                team={data.team}
+                notes={data.notes}
+                activities={data.activities}
                 projects={data.projects}
                 payments={data.payments}
+                canEdit={allow("editRecords")}
+                canDelete={allow("deleteRecords")}
+                canNote={allow("addNotes")}
+                canPay={allow("managePayments")}
                 onEdit={() => openDialog("client", editingClient.id)}
+                onDelete={async () => {
+                  await deleteClient(editingClient.id);
+                  toast.success("Company removed");
+                  closeDialog();
+                }}
                 onAddProject={() =>
                   openDialog("project", null, { clientId: editingClient.id })
                 }
                 onAddPayment={() =>
                   openDialog("payment", null, { clientId: editingClient.id })
                 }
+                onAddNote={(body) => addNote(editingClient.id, body)}
               />
             ) : null}
           </ScrollArea>
@@ -240,8 +242,13 @@ export function GlobalModals() {
               project={editingProject}
               client={data.clients.find((c) => c.id === editingProject.clientId)}
               payments={data.payments}
-              onEdit={() => openDialog("project", editingProject.id)}
+              onEdit={
+                allow("editRecords")
+                  ? () => openDialog("project", editingProject.id)
+                  : () => {}
+              }
               onToggleItem={(itemId, done) => {
+                if (!allow("editRecords")) return;
                 void upsertProject({
                   ...editingProject,
                   checklist: editingProject.checklist.map((item) =>
@@ -271,7 +278,11 @@ export function GlobalModals() {
               studioName={data.settings.studioName}
               studioAddress={data.settings.address}
               studioEmail={data.settings.email}
-              onEdit={() => openDialog("payment", editingPayment.id)}
+              onEdit={
+                allow("managePayments")
+                  ? () => openDialog("payment", editingPayment.id)
+                  : () => {}
+              }
             />
           ) : null}
         </DialogContent>

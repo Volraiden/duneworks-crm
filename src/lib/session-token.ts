@@ -39,7 +39,7 @@ export async function decryptSession(token: string): Promise<SessionUser | null>
       id: payload.id,
       name: payload.name,
       email: payload.email,
-      role: typeof payload.role === "string" ? payload.role : "Studio Lead",
+      role: typeof payload.role === "string" ? payload.role : "Viewer",
     };
   } catch {
     return null;

@@ -1,38 +1,30 @@
 # Duneworks Productions CRM
 
-Studio CRM for Duneworks Productions — clients, projects, finance, and calendar.
+Studio CRM for Duneworks Productions — client pipeline, productions, finance, and calendar.
+
+## Sign in
+
+Demo admin credentials live in `src/lib/seed-config.ts` (not in UI components):
+
+- Email: `Duneworksstudios@gmail.com`
+- Password: `Duneworks123`
+
+Additional seeded studio users are listed in the same file.
 
 ## Stack
 
 - Next.js (App Router) + TypeScript
-- Prisma + SQLite (free local database)
+- Prisma + SQLite
 - Tailwind CSS + shadcn/ui
+- dnd-kit pipeline board
 
 ## Setup
 
 ```bash
 npm install
 cp .env.example .env
-npx prisma migrate dev
+npx prisma migrate deploy
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and create the first studio account. All CRM data is stored in `prisma/dev.db`.
-
-## Netlify
-
-Connect the GitHub repo and deploy. The build no longer requires `DATABASE_URL` to be set before `npm install`.
-
-Set these in **Site configuration → Environment variables**:
-
-- `SESSION_SECRET` — a long random string (used to sign login cookies)
-- Optional `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` — a free [Turso](https://turso.tech) database so clients, projects, and logins persist across deploys
-
-Without Turso, Netlify uses a temporary SQLite file. That works for a live demo, but data can reset when functions restart.
-
-## Scripts
-
-- `npm run dev` — start the app
-- `npm run build` — production build
-- `npx prisma migrate dev` — apply database migrations
-- `npx prisma studio` — inspect the database
+Open [http://localhost:3000](http://localhost:3000) and sign in. Pipeline companies, notes, and permissions persist in `prisma/dev.db`.

@@ -2,7 +2,7 @@ import type { CrmData, StudioSettings } from "@/lib/types";
 
 export const DEFAULT_SETTINGS: StudioSettings = {
   studioName: "Duneworks Productions",
-  email: "",
+  email: "Duneworksstudios@gmail.com",
   phone: "",
   website: "",
   address: "",
@@ -20,7 +20,10 @@ export const EMPTY_CRM_DATA: CrmData = {
   projects: [],
   payments: [],
   events: [],
-  possibleClients: [],
+  stages: [],
+  team: [],
+  notes: [],
+  activities: [],
   settings: DEFAULT_SETTINGS,
 };
 

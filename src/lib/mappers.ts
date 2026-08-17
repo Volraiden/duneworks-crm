@@ -3,24 +3,31 @@ import type {
   CalendarEvent,
   ChecklistItem,
   Client,
+  ClientActivity,
+  ClientNote,
   ClientStatus,
   EventType,
   Payment,
   PaymentMethod,
   PaymentStatus,
-  PossibleClient,
-  PossibleClientOutcome,
+  PipelineStage,
   Project,
   ProjectStatus,
+  StageKind,
   StudioSettings,
+  TeamMember,
 } from "@/lib/types";
+import { normalizeRole } from "@/lib/permissions";
 import type {
   CalendarEvent as DbEvent,
   Client as DbClient,
+  ClientActivity as DbActivity,
+  ClientNote as DbNote,
   Payment as DbPayment,
-  PossibleClient as DbPossibleClient,
+  PipelineStage as DbStage,
   Project as DbProject,
   StudioSettings as DbSettings,
+  User as DbUser,
 } from "@/generated/prisma/client";
 
 function toDateOnly(value: Date) {
@@ -35,18 +42,73 @@ function parseJson<T>(value: string, fallback: T): T {
   }
 }
 
-export function mapClient(row: DbClient): Client {
+export function mapTeamMember(row: DbUser): TeamMember {
   return {
     id: row.id,
     name: row.name,
+    email: row.email,
+    role: normalizeRole(row.role),
+    active: row.active,
+  };
+}
+
+export function mapStage(row: DbStage): PipelineStage {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    color: row.color,
+    sortOrder: row.sortOrder,
+    kind: row.kind as StageKind,
+  };
+}
+
+export function mapClient(row: DbClient): Client {
+  return {
+    id: row.id,
+    clientNumber: row.clientNumber,
+    name: row.name,
     company: row.company,
+    industry: row.industry,
     email: row.email,
     phone: row.phone,
+    potentialValue: row.potentialValue,
+    source: row.source,
+    assignedUserId: row.assignedUserId,
+    stageId: row.stageId,
     status: row.status as ClientStatus,
     tags: parseJson<string[]>(row.tags, []),
     notes: row.notes,
+    sortOrder: row.sortOrder,
     createdAt: toDateOnly(row.createdAt),
     lastActivity: toDateOnly(row.lastActivity),
+  };
+}
+
+export function mapNote(row: DbNote): ClientNote {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    userId: row.userId,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function mapActivity(row: DbActivity): ClientActivity {
+  const type = row.type as ClientActivity["type"];
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    userId: row.userId,
+    type: ["created", "stage_move", "note", "denied", "updated"].includes(type)
+      ? type
+      : "updated",
+    fromStage: row.fromStage,
+    toStage: row.toStage,
+    reason: row.reason,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -92,17 +154,6 @@ export function mapEvent(row: DbEvent): CalendarEvent {
   };
 }
 
-export function mapPossibleClient(row: DbPossibleClient): PossibleClient {
-  return {
-    id: row.id,
-    company: row.company,
-    phone: row.phone,
-    outcome: row.outcome as PossibleClientOutcome,
-    notes: row.notes,
-    createdAt: toDateOnly(row.createdAt),
-  };
-}
-
 export function mapSettings(row: DbSettings): StudioSettings {
   return {
     studioName: row.studioName,
@@ -122,4 +173,12 @@ export function mapSettings(row: DbSettings): StudioSettings {
 
 export function fromDateOnly(value: string) {
   return new Date(`${value.slice(0, 10)}T12:00:00.000Z`);
+}
+
+export function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 48);
 }

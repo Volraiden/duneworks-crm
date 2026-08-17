@@ -23,43 +23,44 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/auth-context";
 import { useCrm } from "@/context/crm-context";
-import { CLIENT_STATUSES } from "@/lib/types";
-import { clientRevenue, projectCountForClient } from "@/lib/analytics";
 import { formatCurrency, formatDate, initials } from "@/lib/format";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function ClientsPage() {
   const { data, openDialog } = useCrm();
+  const { allow } = useAuth();
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [tag, setTag] = useState("all");
+  const [stageId, setStageId] = useState("all");
   const [view, setView] = useState<"table" | "grid">("table");
 
-  const tags = useMemo(
-    () => [...new Set(data.clients.flatMap((client) => client.tags))],
-    [data.clients]
+  const filtered = useMemo(
+    () =>
+      data.clients.filter((client) => {
+        const haystack =
+          `${client.name} ${client.company} ${client.email} ${client.clientNumber}`.toLowerCase();
+        return (
+          haystack.includes(query.toLowerCase()) &&
+          (stageId === "all" || client.stageId === stageId)
+        );
+      }),
+    [data.clients, query, stageId]
   );
-
-  const filtered = data.clients.filter((client) => {
-    const haystack = `${client.name} ${client.company} ${client.email}`.toLowerCase();
-    const matchesQuery = haystack.includes(query.toLowerCase());
-    const matchesStatus = status === "all" || client.status === status;
-    const matchesTag = tag === "all" || client.tags.includes(tag);
-    return matchesQuery && matchesStatus && matchesTag;
-  });
 
   return (
     <PageTransition>
       <PageHeader
         eyebrow="Roster"
         title="Clients"
-        description="Search, filter, and open any production partner."
+        description="Every company in the pipeline, with owners, value, and stage."
         actions={
-          <Button onClick={() => openDialog("client")}>
-            <Plus />
-            Add Client
-          </Button>
+          allow("createRecords") ? (
+            <Button onClick={() => openDialog("client")}>
+              <Plus />
+              Add company
+            </Button>
+          ) : null
         }
       />
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -67,33 +68,20 @@ export default function ClientsPage() {
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-10 pl-9"
-            placeholder="Search name, company, or email"
+            placeholder="Search company, contact, or ID"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-full lg:w-40">
-            <SelectValue placeholder="Status" />
+        <Select value={stageId} onValueChange={setStageId}>
+          <SelectTrigger className="w-full lg:w-52">
+            <SelectValue placeholder="Stage" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {CLIENT_STATUSES.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={tag} onValueChange={setTag}>
-          <SelectTrigger className="w-full lg:w-48">
-            <SelectValue placeholder="Tag" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All tags</SelectItem>
-            {tags.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item}
+            <SelectItem value="all">All stages</SelectItem>
+            {data.stages.map((stage) => (
+              <SelectItem key={stage.id} value={stage.id}>
+                {stage.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -118,89 +106,82 @@ export default function ClientsPage() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={<Search className="size-5" />}
-          title="No clients match"
-          description="Try a different search, or add a new client to the roster."
-          actionLabel="Add Client"
-          onAction={() => openDialog("client")}
+          title="No companies match"
+          description="Try a different search, or add a company to the roster."
+          actionLabel={allow("createRecords") ? "Add company" : undefined}
+          onAction={allow("createRecords") ? () => openDialog("client") : undefined}
         />
       ) : view === "table" ? (
         <div className="glass-panel rounded-2xl">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Client</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Company</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Earned</TableHead>
-                <TableHead>Projects</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Value</TableHead>
                 <TableHead>Last activity</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((client) => (
-                <TableRow
-                  key={client.id}
-                  className="cursor-pointer"
-                  onClick={() => openDialog("clientDetail", client.id)}
-                >
-                  <TableCell className="font-medium">{client.name}</TableCell>
-                  <TableCell>{client.company}</TableCell>
-                  <TableCell>{client.email}</TableCell>
-                  <TableCell>{client.phone}</TableCell>
-                  <TableCell>
-                    <ClientStatusBadge status={client.status} />
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(clientRevenue(data.payments, client.id), true)}
-                  </TableCell>
-                  <TableCell>
-                    {projectCountForClient(data.projects, client.id)}
-                  </TableCell>
-                  <TableCell>{formatDate(client.lastActivity)}</TableCell>
-                </TableRow>
-              ))}
+              {filtered.map((client) => {
+                const owner = data.team.find((member) => member.id === client.assignedUserId);
+                const stage = data.stages.find((item) => item.id === client.stageId);
+                return (
+                  <TableRow
+                    key={client.id}
+                    className="cursor-pointer"
+                    onClick={() => openDialog("clientDetail", client.id)}
+                  >
+                    <TableCell className="font-mono text-xs">#{client.clientNumber}</TableCell>
+                    <TableCell className="font-medium">{client.company}</TableCell>
+                    <TableCell>{client.name}</TableCell>
+                    <TableCell>{owner?.name ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{stage?.name ?? client.status}</Badge>
+                    </TableCell>
+                    <TableCell>{formatCurrency(client.potentialValue, true)}</TableCell>
+                    <TableCell>{formatDate(client.lastActivity)}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((client) => (
-            <button
-              key={client.id}
-              type="button"
-              onClick={() => openDialog("clientDetail", client.id)}
-              className="glass-panel rounded-2xl p-5 text-left transition hover:-translate-y-0.5 hover:border-primary/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback>{initials(client.name)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{client.name}</p>
-                    <p className="text-sm text-muted-foreground">{client.company}</p>
+          {filtered.map((client) => {
+            const stage = data.stages.find((item) => item.id === client.stageId);
+            return (
+              <button
+                key={client.id}
+                type="button"
+                onClick={() => openDialog("clientDetail", client.id)}
+                className="glass-panel rounded-2xl p-5 text-left transition hover:-translate-y-0.5 hover:border-primary/30"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarFallback>{initials(client.company)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{client.company}</p>
+                      <p className="text-sm text-muted-foreground">{client.name}</p>
+                    </div>
                   </div>
+                  <ClientStatusBadge status={client.status} />
                 </div>
-                <ClientStatusBadge status={client.status} />
-              </div>
-              <p className="mt-4 font-heading text-2xl">
-                {formatCurrency(clientRevenue(data.payments, client.id), true)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {projectCountForClient(data.projects, client.id)} projects ·{" "}
-                {formatDate(client.lastActivity)}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-1">
-                {client.tags.map((item) => (
-                  <Badge key={item} variant="outline">
-                    {item}
-                  </Badge>
-                ))}
-              </div>
-            </button>
-          ))}
+                <p className="mt-4 font-heading text-2xl">
+                  {formatCurrency(client.potentialValue, true)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {stage?.name} · {formatDate(client.lastActivity)}
+                </p>
+              </button>
+            );
+          })}
         </div>
       )}
     </PageTransition>

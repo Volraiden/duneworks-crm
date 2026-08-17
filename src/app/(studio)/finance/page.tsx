@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCrm } from "@/context/crm-context";
+import { useAuth } from "@/context/auth-context";
 import { PAYMENT_STATUSES } from "@/lib/types";
 import {
   averageClientValue,
@@ -47,6 +48,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 
 export default function FinancePage() {
   const { data, openDialog } = useCrm();
+  const { allow } = useAuth();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
 
@@ -79,6 +81,7 @@ export default function FinancePage() {
         description="Revenue by month and client, with a complete payment log."
         actions={
           <>
+            {allow("viewFinanceAnalytics") ? (
             <Button
               variant="outline"
               onClick={() => {
@@ -92,13 +95,18 @@ export default function FinancePage() {
               <Download />
               Export CSV
             </Button>
+            ) : null}
+            {allow("managePayments") ? (
             <Button onClick={() => openDialog("payment")}>
               <Plus />
               Add Payment
             </Button>
+            ) : null}
           </>
         }
       />
+      {allow("viewFinanceAnalytics") ? (
+      <>
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Total earned" value={formatCurrency(earned, true)} />
         <Stat label="Pending revenue" value={formatCurrency(pending, true)} />
@@ -165,6 +173,8 @@ export default function FinancePage() {
           </CardContent>
         </Card>
       </div>
+      </>
+      ) : null}
       <div className="mt-8 mb-4 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -194,8 +204,8 @@ export default function FinancePage() {
           icon={<Search className="size-5" />}
           title="No payments found"
           description="Adjust filters or log a new invoice."
-          actionLabel="Add Payment"
-          onAction={() => openDialog("payment")}
+          actionLabel={allow("managePayments") ? "Add Payment" : undefined}
+          onAction={allow("managePayments") ? () => openDialog("payment") : undefined}
         />
       ) : (
         <div className="glass-panel rounded-2xl">

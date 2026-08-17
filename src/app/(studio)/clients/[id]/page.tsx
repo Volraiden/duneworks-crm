@@ -2,27 +2,18 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { PageTransition } from "@/components/page-chrome";
-import { ClientDetail } from "@/components/clients/client-detail";
+import { CompanyDetail } from "@/components/clients/company-detail";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/context/auth-context";
 import { useCrm } from "@/context/crm-context";
 
 export default function ClientPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { data, openDialog, deleteClient } = useCrm();
+  const { data, openDialog, deleteClient, addNote } = useCrm();
+  const { allow } = useAuth();
   const client = data.clients.find((item) => item.id === params.id);
 
   if (!client) {
@@ -38,50 +29,34 @@ export default function ClientPage() {
 
   return (
     <PageTransition>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6">
         <Button variant="ghost" onClick={() => router.push("/clients")}>
           <ArrowLeft />
           Clients
         </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive">
-              <Trash2 />
-              Delete
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete this client?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Projects and payments linked to {client.company} will also be removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                onClick={() => {
-                  deleteClient(client.id);
-                  toast.success("Client removed");
-                  router.push("/clients");
-                }}
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
       <div className="glass-panel rounded-3xl p-6 sm:p-8">
-        <ClientDetail
+        <CompanyDetail
           client={client}
+          stage={data.stages.find((stage) => stage.id === client.stageId)}
+          team={data.team}
+          notes={data.notes}
+          activities={data.activities}
           projects={data.projects}
           payments={data.payments}
-          showFullPageLink={false}
+          canEdit={allow("editRecords")}
+          canDelete={allow("deleteRecords")}
+          canNote={allow("addNotes")}
+          canPay={allow("managePayments")}
           onEdit={() => openDialog("client", client.id)}
+          onDelete={async () => {
+            await deleteClient(client.id);
+            toast.success("Company removed");
+            router.push("/clients");
+          }}
           onAddProject={() => openDialog("project", null, { clientId: client.id })}
           onAddPayment={() => openDialog("payment", null, { clientId: client.id })}
+          onAddNote={(body) => addNote(client.id, body)}
         />
       </div>
     </PageTransition>

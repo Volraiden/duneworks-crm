@@ -4,16 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  Columns3,
   LayoutDashboard,
   LogOut,
   PanelLeft,
-  Phone,
   Settings,
+  Shield,
   Users,
   Clapperboard,
   Wallet,
 } from "lucide-react";
-import { BetaBadge } from "@/components/beta-badge";
 import { StudioWordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -25,15 +25,22 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
 import { DatabaseHealth } from "@/components/database-health";
+import type { Permission } from "@/lib/permissions";
 
-const NAV = [
+const NAV: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  permission?: Permission;
+}[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/pipeline", label: "Client Pipeline", icon: Columns3 },
   { href: "/clients", label: "Clients", icon: Users },
-  { href: "/possible-clients", label: "Possible clients", icon: Phone },
   { href: "/projects", label: "Projects", icon: Clapperboard },
-  { href: "/finance", label: "Finance", icon: Wallet },
+  { href: "/finance", label: "Finance", icon: Wallet, permission: "viewFinance" },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/team", label: "Team & Permissions", icon: Shield, permission: "manageUsers" },
+  { href: "/settings", label: "Settings", icon: Settings, permission: "manageSettings" },
 ];
 
 export function Sidebar({
@@ -46,7 +53,8 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { logout, user } = useAuth();
+  const { logout, user, allow } = useAuth();
+  const items = NAV.filter((item) => !item.permission || allow(item.permission));
 
   return (
     <aside
@@ -57,7 +65,6 @@ export function Sidebar({
     >
       <div className="flex items-center justify-between gap-2 px-4 py-5">
         <StudioWordmark compact={collapsed} />
-        {!collapsed && <BetaBadge />}
       </div>
       <div className="px-3">
         <Button
@@ -71,7 +78,7 @@ export function Sidebar({
         </Button>
       </div>
       <nav className="mt-4 flex flex-1 flex-col gap-1 px-3">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           const link = (
@@ -114,7 +121,7 @@ export function Sidebar({
             <>
               <p className="truncate text-sm font-medium">{user?.name ?? "Studio"}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {user?.role ?? "Studio Lead"}
+                {user?.role ?? "Viewer"}
               </p>
             </>
           )}

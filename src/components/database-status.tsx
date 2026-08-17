@@ -47,7 +47,7 @@ export function DatabaseStatusPanel({ compact = false }: { compact?: boolean }) 
         ? [
             { name: "Users", value: status.tables.users },
             { name: "Clients", value: status.tables.clients },
-            { name: "Prospects", value: status.tables.possibleClients },
+            { name: "Notes", value: status.tables.notes },
             { name: "Projects", value: status.tables.projects },
             { name: "Payments", value: status.tables.payments },
             { name: "Events", value: status.tables.events },
@@ -181,8 +181,8 @@ export function DatabaseStatusPanel({ compact = false }: { compact?: boolean }) 
                 <Row label="Users" value={String(status.tables.users)} />
                 <Row label="Clients" value={String(status.tables.clients)} />
                 <Row
-                  label="Possible clients"
-                  value={String(status.tables.possibleClients)}
+                  label="Notes"
+                  value={String(status.tables.notes)}
                 />
                 <Row label="Projects" value={String(status.tables.projects)} />
                 <Row label="Payments" value={String(status.tables.payments)} />

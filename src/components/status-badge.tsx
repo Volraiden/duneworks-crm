@@ -4,7 +4,6 @@ import type {
   ClientStatus,
   EventType,
   PaymentStatus,
-  PossibleClientOutcome,
   ProjectStatus,
 } from "@/lib/types";
 
@@ -13,6 +12,7 @@ const clientStyles: Record<ClientStatus, string> = {
   Active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
   Paused: "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200",
   Completed: "border-primary/30 bg-primary/10 text-primary",
+  Denied: "border-destructive/40 bg-destructive/15 text-destructive",
 };
 
 const projectStyles: Record<ProjectStatus, string> = {
@@ -41,14 +41,6 @@ const eventLabels: Record<EventType, string> = {
   meeting: "Meeting",
   shoot: "Shoot",
   payment: "Payment",
-};
-
-const possibleClientStyles: Record<PossibleClientOutcome, string> = {
-  "Needed the service":
-    "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
-  "Will let us know":
-    "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200",
-  "Said no": "border-destructive/40 bg-destructive/15 text-destructive",
 };
 
 export function ClientStatusBadge({ status }: { status: ClientStatus }) {
@@ -81,18 +73,6 @@ export function EventTypeDot({ type }: { type: EventType }) {
       className={cn("inline-block size-2 rounded-full", eventStyles[type])}
       title={eventLabels[type]}
     />
-  );
-}
-
-export function PossibleClientOutcomeBadge({
-  outcome,
-}: {
-  outcome: PossibleClientOutcome;
-}) {
-  return (
-    <Badge variant="outline" className={cn("border", possibleClientStyles[outcome])}>
-      {outcome}
-    </Badge>
   );
 }
 

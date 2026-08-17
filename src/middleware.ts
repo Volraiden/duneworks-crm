@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decryptSession, SESSION_COOKIE } from "@/lib/session-token";
+import { can } from "@/lib/permissions";
 
 const PUBLIC_PATHS = ["/", "/login"];
 
@@ -19,6 +20,19 @@ export async function middleware(request: NextRequest) {
     const login = new URL("/login", request.url);
     login.searchParams.set("from", pathname);
     return NextResponse.redirect(login);
+  }
+
+  if (pathname.startsWith("/team") && !can(session.role, "manageUsers")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (pathname.startsWith("/settings") && !can(session.role, "manageSettings")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (pathname.startsWith("/finance") && !can(session.role, "viewFinance")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (pathname.startsWith("/possible-clients")) {
+    return NextResponse.redirect(new URL("/pipeline", request.url));
   }
 
   return NextResponse.next();

@@ -36,12 +36,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useCrm } from "@/context/crm-context";
+import { useAuth } from "@/context/auth-context";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/types";
 import { projectRevenue } from "@/lib/analytics";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export default function ProjectsPage() {
   const { data, openDialog, upsertProject, deleteProject } = useCrm();
+  const { allow } = useAuth();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [view, setView] = useState<"table" | "kanban">("kanban");
@@ -66,10 +68,12 @@ export default function ProjectsPage() {
         title="Projects"
         description="Move work through inquiry to delivery. Drag cards between stages."
         actions={
-          <Button onClick={() => openDialog("project")}>
-            <Plus />
-            Add Project
-          </Button>
+          allow("createRecords") ? (
+            <Button onClick={() => openDialog("project")}>
+              <Plus />
+              Add Project
+            </Button>
+          ) : null
         }
       />
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -127,6 +131,7 @@ export default function ProjectsPage() {
           payments={data.payments}
           onOpen={(id) => openDialog("projectDetail", id)}
           onMove={(id, nextStatus: ProjectStatus) => {
+            if (!allow("editRecords")) return;
             const project = data.projects.find((item) => item.id === id);
             if (!project || project.status === nextStatus) return;
             upsertProject({ ...project, status: nextStatus });
@@ -178,6 +183,7 @@ export default function ProjectsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
+                      {allow("deleteRecords") ? (
                       <Button
                         size="icon-sm"
                         variant="ghost"
@@ -188,6 +194,7 @@ export default function ProjectsPage() {
                       >
                         <Trash2 />
                       </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 );

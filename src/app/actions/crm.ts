@@ -2,48 +2,42 @@
 
 import { getPrisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { DEFAULT_SETTINGS, EMPTY_CRM_DATA } from "@/lib/empty-data";
+import { EMPTY_CRM_DATA } from "@/lib/empty-data";
+import { assertCan, requireUser } from "@/lib/guard";
 import {
   fromDateOnly,
+  mapActivity,
   mapClient,
   mapEvent,
+  mapNote,
   mapPayment,
-  mapPossibleClient,
   mapProject,
   mapSettings,
+  mapStage,
+  mapTeamMember,
 } from "@/lib/mappers";
 import type {
   CalendarEvent,
   Client,
   CrmData,
   Payment,
-  PossibleClient,
   Project,
   StudioSettings,
 } from "@/lib/types";
 
-async function requireSession() {
-  const session = await getSession();
-  if (!session) throw new Error("Unauthorized");
-  return session;
+async function nextClientNumber(prisma: Awaited<ReturnType<typeof getPrisma>>) {
+  const rows = await prisma.client.findMany({ select: { clientNumber: true } });
+  const max = rows.reduce((highest, row) => {
+    const value = Number.parseInt(row.clientNumber.replace(/\D/g, ""), 10);
+    return Number.isFinite(value) ? Math.max(highest, value) : highest;
+  }, 1023);
+  return `DW-${max + 1}`;
 }
 
-async function ensureSettings() {
-  const prisma = await getPrisma();
-  const existing = await prisma.studioSettings.findUnique({
-    where: { id: "studio" },
-  });
-  if (existing) return existing;
-  return prisma.studioSettings.create({
-    data: {
-      id: "studio",
-      studioName: DEFAULT_SETTINGS.studioName,
-      email: DEFAULT_SETTINGS.email,
-      phone: DEFAULT_SETTINGS.phone,
-      website: DEFAULT_SETTINGS.website,
-      address: DEFAULT_SETTINGS.address,
-    },
-  });
+function statusFromKind(kind: string) {
+  if (kind === "paid") return "Active";
+  if (kind === "denied") return "Denied";
+  return "Lead";
 }
 
 export async function getCrmData(): Promise<CrmData> {
@@ -51,61 +45,217 @@ export async function getCrmData(): Promise<CrmData> {
   if (!session) return EMPTY_CRM_DATA;
 
   const prisma = await getPrisma();
-  const [clients, projects, payments, events, possibleClients, settings] =
-    await Promise.all([
-      prisma.client.findMany({ orderBy: { lastActivity: "desc" } }),
-      prisma.project.findMany({ orderBy: { createdAt: "desc" } }),
-      prisma.payment.findMany({ orderBy: { date: "desc" } }),
-      prisma.calendarEvent.findMany({ orderBy: { date: "asc" } }),
-      prisma.possibleClient.findMany({ orderBy: { createdAt: "desc" } }),
-      ensureSettings(),
-    ]);
+  const [
+    clients,
+    projects,
+    payments,
+    events,
+    stages,
+    team,
+    notes,
+    activities,
+    settings,
+  ] = await Promise.all([
+    prisma.client.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }] }),
+    prisma.project.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.payment.findMany({ orderBy: { date: "desc" } }),
+    prisma.calendarEvent.findMany({ orderBy: { date: "asc" } }),
+    prisma.pipelineStage.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.clientNote.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.clientActivity.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.studioSettings.findUnique({ where: { id: "studio" } }),
+  ]);
 
   return {
     clients: clients.map(mapClient),
     projects: projects.map(mapProject),
     payments: payments.map(mapPayment),
     events: events.map(mapEvent),
-    possibleClients: possibleClients.map(mapPossibleClient),
-    settings: mapSettings(settings),
+    stages: stages.map(mapStage),
+    team: team.map(mapTeamMember),
+    notes: notes.map(mapNote),
+    activities: activities.map(mapActivity),
+    settings: settings ? mapSettings(settings) : EMPTY_CRM_DATA.settings,
   };
 }
 
 export async function saveClient(
-  input: Omit<Client, "id" | "createdAt" | "lastActivity"> & { id?: string }
+  input: Omit<Client, "id" | "createdAt" | "lastActivity" | "clientNumber" | "sortOrder"> & {
+    id?: string;
+    clientNumber?: string;
+    sortOrder?: number;
+  }
 ) {
-  await requireSession();
-  const prisma = await getPrisma();
-  const now = new Date();
+  const { prisma, actor, role } = await requireUser();
+  assertCan(role, input.id ? "editRecords" : "createRecords");
+  const stage = await prisma.pipelineStage.findUnique({ where: { id: input.stageId } });
+  if (!stage) throw new Error("Choose a pipeline stage.");
+
   const data = {
     name: input.name,
     company: input.company,
+    industry: input.industry,
     email: input.email,
     phone: input.phone,
-    status: input.status,
+    potentialValue: input.potentialValue,
+    source: input.source,
+    assignedUserId: input.assignedUserId,
+    stageId: input.stageId,
+    status: statusFromKind(stage.kind),
     tags: JSON.stringify(input.tags),
     notes: input.notes,
-    lastActivity: now,
+    lastActivity: new Date(),
   };
 
-  const row = input.id
-    ? await prisma.client.update({ where: { id: input.id }, data })
-    : await prisma.client.create({ data });
+  if (input.id) {
+    const previous = await prisma.client.findUnique({ where: { id: input.id } });
+    const row = await prisma.client.update({ where: { id: input.id }, data });
+    if (previous && previous.stageId !== input.stageId) {
+      await prisma.clientActivity.create({
+        data: {
+          clientId: row.id,
+          userId: actor.id,
+          type: stage.kind === "denied" ? "denied" : "stage_move",
+          fromStage: previous.stageId,
+          toStage: input.stageId,
+          body: `Moved to ${stage.name}.`,
+        },
+      });
+    } else {
+      await prisma.clientActivity.create({
+        data: {
+          clientId: row.id,
+          userId: actor.id,
+          type: "updated",
+          body: "Company details updated.",
+        },
+      });
+    }
+    return row.id;
+  }
 
+  const countInStage = await prisma.client.count({ where: { stageId: input.stageId } });
+  const row = await prisma.client.create({
+    data: {
+      ...data,
+      clientNumber: await nextClientNumber(prisma),
+      sortOrder: countInStage,
+    },
+  });
+  await prisma.clientActivity.create({
+    data: {
+      clientId: row.id,
+      userId: actor.id,
+      type: "created",
+      toStage: stage.name,
+      body: `Added ${row.company} to ${stage.name}.`,
+    },
+  });
   return row.id;
 }
 
 export async function removeClient(id: string) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, "deleteRecords");
   await prisma.client.delete({ where: { id } });
+}
+
+export async function moveClient(input: {
+  id: string;
+  stageId: string;
+  reason?: string;
+  notes?: string;
+  beforeId?: string | null;
+}) {
+  const { prisma, actor, role } = await requireUser();
+  assertCan(role, "movePipeline");
+
+  const client = await prisma.client.findUnique({ where: { id: input.id } });
+  const stage = await prisma.pipelineStage.findUnique({ where: { id: input.stageId } });
+  if (!client || !stage) throw new Error("Company or stage not found.");
+
+  if (stage.kind === "denied" && !input.reason?.trim()) {
+    throw new Error("A denial reason is required.");
+  }
+
+  const siblings = await prisma.client.findMany({
+    where: { stageId: input.stageId, id: { not: input.id } },
+    orderBy: { sortOrder: "asc" },
+  });
+  const orderedIds = siblings.map((row) => row.id);
+  const insertAt = input.beforeId
+    ? Math.max(0, orderedIds.indexOf(input.beforeId))
+    : orderedIds.length;
+  if (input.beforeId && orderedIds.includes(input.beforeId)) {
+    orderedIds.splice(insertAt, 0, input.id);
+  } else {
+    orderedIds.push(input.id);
+  }
+
+  await prisma.client.update({
+    where: { id: input.id },
+    data: {
+      stageId: stage.id,
+      status: statusFromKind(stage.kind),
+      lastActivity: new Date(),
+      notes: input.notes?.trim()
+        ? `${client.notes}\n${input.notes.trim()}`.trim()
+        : client.notes,
+    },
+  });
+
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      prisma.client.update({ where: { id }, data: { sortOrder: index } })
+    )
+  );
+
+  if (client.stageId !== stage.id) {
+    const fromStage = await prisma.pipelineStage.findUnique({
+      where: { id: client.stageId },
+    });
+    await prisma.clientActivity.create({
+      data: {
+        clientId: client.id,
+        userId: actor.id,
+        type: stage.kind === "denied" ? "denied" : "stage_move",
+        fromStage: fromStage?.name ?? "",
+        toStage: stage.name,
+        reason: input.reason?.trim() ?? "",
+        body: input.notes?.trim() || `Moved from ${fromStage?.name ?? "previous"} to ${stage.name}.`,
+      },
+    });
+  }
+}
+
+export async function addClientNote(clientId: string, body: string) {
+  const { prisma, actor, role } = await requireUser();
+  assertCan(role, "addNotes");
+  const text = body.trim();
+  if (!text) throw new Error("Note cannot be empty.");
+  await prisma.clientNote.create({
+    data: { clientId, userId: actor.id, body: text },
+  });
+  await prisma.client.update({
+    where: { id: clientId },
+    data: { lastActivity: new Date() },
+  });
+  await prisma.clientActivity.create({
+    data: {
+      clientId,
+      userId: actor.id,
+      type: "note",
+      body: text,
+    },
+  });
 }
 
 export async function saveProject(
   input: Omit<Project, "id" | "createdAt"> & { id?: string }
 ) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, input.id ? "editRecords" : "createRecords");
   const data = {
     name: input.name,
     clientId: input.clientId,
@@ -131,16 +281,16 @@ export async function saveProject(
 }
 
 export async function removeProject(id: string) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, "deleteRecords");
   await prisma.project.delete({ where: { id } });
 }
 
 export async function savePayment(
   input: Omit<Payment, "id"> & { id?: string }
 ) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, "managePayments");
   const data = {
     date: fromDateOnly(input.date),
     clientId: input.clientId,
@@ -165,16 +315,16 @@ export async function savePayment(
 }
 
 export async function removePayment(id: string) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, "deleteRecords");
   await prisma.payment.delete({ where: { id } });
 }
 
 export async function saveEvent(
   input: Omit<CalendarEvent, "id"> & { id?: string }
 ) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, input.id ? "editRecords" : "createRecords");
   const data = {
     title: input.title,
     date: fromDateOnly(input.date),
@@ -192,45 +342,22 @@ export async function saveEvent(
 }
 
 export async function removeEvent(id: string) {
-  await requireSession();
-  const prisma = await getPrisma();
+  const { prisma, role } = await requireUser();
+  assertCan(role, "deleteRecords");
   await prisma.calendarEvent.delete({ where: { id } });
 }
 
-export async function savePossibleClient(
-  input: Omit<PossibleClient, "id" | "createdAt"> & { id?: string }
-) {
-  await requireSession();
-  const prisma = await getPrisma();
-  const data = {
-    company: input.company,
-    phone: input.phone,
-    outcome: input.outcome,
-    notes: input.notes,
-  };
-
-  const row = input.id
-    ? await prisma.possibleClient.update({ where: { id: input.id }, data })
-    : await prisma.possibleClient.create({ data });
-
-  return row.id;
-}
-
-export async function removePossibleClient(id: string) {
-  await requireSession();
-  const prisma = await getPrisma();
-  await prisma.possibleClient.delete({ where: { id } });
-}
-
 export async function saveSettings(patch: Partial<StudioSettings>) {
-  await requireSession();
-  const prisma = await getPrisma();
-  const current = mapSettings(await ensureSettings());
+  const { prisma, role } = await requireUser();
+  assertCan(role, "manageSettings");
+  const current = await prisma.studioSettings.findUnique({ where: { id: "studio" } });
+  if (!current) throw new Error("Studio settings missing.");
+  const mapped = mapSettings(current);
   const next: StudioSettings = {
-    ...current,
+    ...mapped,
     ...patch,
     notifications: {
-      ...current.notifications,
+      ...mapped.notifications,
       ...patch.notifications,
     },
   };
