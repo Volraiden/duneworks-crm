@@ -204,8 +204,8 @@ export default function GuidePage() {
             <ul className="mt-4 space-y-2 text-sm">
               <li>
                 <strong className="text-foreground">Add a company</strong> — company
-                name, contact, phone, email, potential value, source, owner, stage, and
-                tags.
+                name, contact, phone, email, potential value, source, owner, and tags.
+                New companies start in Possible Clients. Drag the card to move them.
               </li>
               <li>
                 <strong className="text-foreground">Move a deal</strong> — drag a card

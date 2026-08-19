@@ -66,7 +66,7 @@ export function GlobalModals() {
             <DialogDescription>
               {isClientIntent
                 ? "Add a signed client with company, contact, and production details."
-                : "Log company, contact, value, and the first pipeline stage."}
+                : "Fill in the company and contact. New leads start in Possible Clients — move them on the pipeline later."}
             </DialogDescription>
           </DialogHeader>
           <CompanyForm

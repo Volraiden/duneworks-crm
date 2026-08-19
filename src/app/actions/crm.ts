@@ -40,6 +40,20 @@ function statusFromKind(kind: string) {
   return "Lead";
 }
 
+async function resolveCreateStage(
+  prisma: Awaited<ReturnType<typeof getPrisma>>,
+  stageId?: string
+) {
+  if (stageId) {
+    const stage = await prisma.pipelineStage.findUnique({ where: { id: stageId } });
+    if (stage) return stage;
+  }
+  return prisma.pipelineStage.findFirst({
+    where: { kind: { not: "denied" } },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
 export async function getCrmData(): Promise<CrmData> {
   const session = await getSession();
   if (!session) return EMPTY_CRM_DATA;
@@ -89,7 +103,9 @@ export async function saveClient(
 ) {
   const { prisma, actor, role } = await requireUser();
   assertCan(role, input.id ? "editRecords" : "createRecords");
-  const stage = await prisma.pipelineStage.findUnique({ where: { id: input.stageId } });
+  const stage = input.id
+    ? await prisma.pipelineStage.findUnique({ where: { id: input.stageId } })
+    : await resolveCreateStage(prisma, input.stageId);
   if (!stage) throw new Error("Choose a pipeline stage.");
 
   const data = {
@@ -101,7 +117,7 @@ export async function saveClient(
     potentialValue: input.potentialValue,
     source: input.source,
     assignedUserId: input.assignedUserId,
-    stageId: input.stageId,
+    stageId: stage.id,
     status: statusFromKind(stage.kind),
     tags: JSON.stringify(input.tags),
     notes: input.notes,
@@ -111,14 +127,14 @@ export async function saveClient(
   if (input.id) {
     const previous = await prisma.client.findUnique({ where: { id: input.id } });
     const row = await prisma.client.update({ where: { id: input.id }, data });
-    if (previous && previous.stageId !== input.stageId) {
+    if (previous && previous.stageId !== stage.id) {
       await prisma.clientActivity.create({
         data: {
           clientId: row.id,
           userId: actor.id,
           type: stage.kind === "denied" ? "denied" : "stage_move",
           fromStage: previous.stageId,
-          toStage: input.stageId,
+          toStage: stage.id,
           body: `Moved to ${stage.name}.`,
         },
       });
@@ -135,7 +151,7 @@ export async function saveClient(
     return row.id;
   }
 
-  const countInStage = await prisma.client.count({ where: { stageId: input.stageId } });
+  const countInStage = await prisma.client.count({ where: { stageId: stage.id } });
   const row = await prisma.client.create({
     data: {
       ...data,

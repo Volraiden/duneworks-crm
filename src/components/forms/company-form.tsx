@@ -46,13 +46,14 @@ export function CompanyForm({
   );
   const [source, setSource] = useState(client?.source || CLIENT_SOURCES[0]);
   const [assignedUserId, setAssignedUserId] = useState(client?.assignedUserId ?? "");
-  const [stageId, setStageId] = useState(
-    client?.stageId ?? defaultStageId ?? stages[0]?.id ?? ""
+  const [stageId, setStageId] = useState(() =>
+    resolveStageId(stages, client?.stageId || defaultStageId)
   );
   const [tags, setTags] = useState<string[]>(client?.tags ?? []);
   const [customTag, setCustomTag] = useState("");
   const [notes, setNotes] = useState(client?.notes ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const isEditing = Boolean(client);
 
   const availableTags = useMemo(
     () => CLIENT_TAGS.filter((tag) => !tags.includes(tag)),
@@ -67,7 +68,6 @@ export function CompanyForm({
     if (Number.isNaN(Number(potentialValue)) || Number(potentialValue) < 0) {
       next.potentialValue = "Enter a valid potential value.";
     }
-    if (!stageId) next.stageId = "Choose a pipeline stage.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -96,25 +96,47 @@ export function CompanyForm({
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Company name" error={errors.company}>
-          <Input value={company} onChange={(e) => setCompany(e.target.value)} />
+          <Input
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Company name"
+          />
         </Field>
         <Field label="Industry">
-          <Input value={industry} onChange={(e) => setIndustry(e.target.value)} />
+          <Input
+            value={industry}
+            onChange={(e) => setIndustry(e.target.value)}
+            placeholder="Restaurant, fashion, real estate…"
+          />
         </Field>
         <Field label="Contact person" error={errors.name}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Who to speak with"
+          />
         </Field>
         <Field label="Email">
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@email.com"
+          />
         </Field>
         <Field label="Phone">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone number"
+          />
         </Field>
         <Field label="Potential value" error={errors.potentialValue}>
           <Input
             inputMode="decimal"
             value={potentialValue}
             onChange={(e) => setPotentialValue(e.target.value)}
+            placeholder="0"
           />
         </Field>
         <Field label="Source">
@@ -150,20 +172,22 @@ export function CompanyForm({
           </Select>
         </Field>
       </div>
-      <Field label="Pipeline stage" error={errors.stageId}>
-        <Select value={stageId} onValueChange={setStageId}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {stages.map((stage) => (
-              <SelectItem key={stage.id} value={stage.id}>
-                {stage.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+      {isEditing ? (
+        <Field label="Pipeline stage">
+          <Select value={stageId} onValueChange={setStageId}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {stages.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>
+                  {stage.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
       <div className="space-y-2">
         <Label>Tags</Label>
         <div className="flex flex-wrap gap-2">
@@ -213,7 +237,11 @@ export function CompanyForm({
         </div>
       </div>
       <Field label="Notes">
-        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Anything the team should know"
+        />
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
@@ -225,6 +253,16 @@ export function CompanyForm({
       </div>
     </form>
   );
+}
+
+function resolveStageId(stages: PipelineStage[], preferred?: string) {
+  if (preferred) {
+    const match = stages.find((stage) => stage.id === preferred);
+    if (match) return match.id;
+  }
+  const possible = stages.find((stage) => stage.kind === "possible");
+  if (possible) return possible.id;
+  return stages.find((stage) => stage.kind !== "denied")?.id ?? stages[0]?.id ?? "";
 }
 
 function Field({
